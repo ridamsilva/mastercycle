@@ -12,19 +12,19 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, onDelete, onEdit }) 
   const sessionDuration = (subject.totalHours / subject.frequency).toFixed(1);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 hover:shadow-md transition-shadow">
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 hover:shadow-md dark:hover:border-slate-700 transition-all">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div 
-            className="w-3 h-3 rounded-full" 
+            className="w-3 h-3 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)]" 
             style={{ backgroundColor: subject.color }} 
           />
-          <h3 className="font-semibold text-slate-800 truncate max-w-[150px]">{subject.name}</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[150px]">{subject.name}</h3>
         </div>
         <div className="flex gap-1">
           <button 
             onClick={() => onEdit(subject)}
-            className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
             title="Editar"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -43,23 +43,23 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, onDelete, onEdit }) 
         </div>
       </div>
       
-      <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 mb-4">
+      <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 dark:text-slate-400 mb-4">
         <div>
-          <span className="block font-medium text-slate-700">{subject.totalHours}h Totais</span>
+          <span className="block font-medium text-slate-700 dark:text-slate-300">{subject.totalHours}h Totais</span>
           Carga Horária
         </div>
         <div>
-          <span className="block font-medium text-slate-700">{subject.frequency}x</span>
+          <span className="block font-medium text-slate-700 dark:text-slate-300">{subject.frequency}x</span>
           {sessionDuration}h por sessão
         </div>
       </div>
 
       <div className="mb-4">
         <div className="flex justify-between items-center text-xs mb-1">
-          <span className="text-slate-500">Domínio da Matéria</span>
-          <span className="font-semibold text-indigo-600">{subject.masteryPercentage}%</span>
+          <span className="text-slate-500 dark:text-slate-400">Domínio da Matéria</span>
+          <span className="font-semibold text-indigo-600 dark:text-indigo-400">{subject.masteryPercentage}%</span>
         </div>
-        <div className="w-full bg-slate-100 rounded-full h-1.5">
+        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
           <div 
             className="h-1.5 rounded-full bg-indigo-500 transition-all duration-500" 
             style={{ width: `${subject.masteryPercentage}%` }}
@@ -72,7 +72,7 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, onDelete, onEdit }) 
           href={subject.notebookUrl} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-indigo-50 text-indigo-600 text-xs font-medium rounded-lg border border-slate-200 hover:border-indigo-200 transition-all"
+          className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
             <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />

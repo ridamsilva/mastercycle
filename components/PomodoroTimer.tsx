@@ -62,19 +62,18 @@ const PomodoroTimer: React.FC = () => {
     return ((total - timeLeft) / total) * 100;
   };
 
-  // Radius for the compact circle
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
 
   return (
-    <div className="bg-white rounded-[24px] border border-slate-200 p-5 shadow-sm transition-all duration-300">
+    <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-800 p-5 shadow-sm transition-all duration-300">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+        <h3 className="text-[10px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest flex items-center gap-2">
           Foco Pomodoro
         </h3>
         <button 
           onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-          className={`p-1.5 rounded-lg transition-all ${isSettingsOpen ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:text-indigo-600'}`}
+          className={`p-1.5 rounded-lg transition-all ${isSettingsOpen ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400'}`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
@@ -83,32 +82,32 @@ const PomodoroTimer: React.FC = () => {
       </div>
 
       {isSettingsOpen && (
-        <div className="grid grid-cols-3 gap-2 mb-4 animate-in slide-in-from-top-2 fade-in duration-300 bg-slate-50 p-3 rounded-xl">
+        <div className="grid grid-cols-3 gap-2 mb-4 animate-in slide-in-from-top-2 fade-in duration-300 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-transparent dark:border-slate-800">
           <div className="space-y-1">
-            <label className="block text-[8px] font-black text-slate-400 uppercase">Foco</label>
+            <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Foco</label>
             <input 
               type="number" 
               value={workTime} 
               onChange={(e) => setWorkTime(Math.max(1, Number(e.target.value)))}
-              className="w-full p-1 border border-slate-200 rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+              className="w-full p-1 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div className="space-y-1">
-            <label className="block text-[8px] font-black text-slate-400 uppercase">Curta</label>
+            <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Curta</label>
             <input 
               type="number" 
               value={shortBreak} 
               onChange={(e) => setShortBreak(Math.max(1, Number(e.target.value)))}
-              className="w-full p-1 border border-slate-200 rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+              className="w-full p-1 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div className="space-y-1">
-            <label className="block text-[8px] font-black text-slate-400 uppercase">Longa</label>
+            <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Longa</label>
             <input 
               type="number" 
               value={longBreak} 
               onChange={(e) => setLongBreak(Math.max(1, Number(e.target.value)))}
-              className="w-full p-1 border border-slate-200 rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+              className="w-full p-1 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
             />
           </div>
         </div>
@@ -117,19 +116,19 @@ const PomodoroTimer: React.FC = () => {
       <div className="flex gap-1.5 mb-6">
         <button 
           onClick={() => updateTimeLeft('work')}
-          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'work' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'work' ? 'bg-indigo-600 text-white shadow-md dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
         >
           Foco
         </button>
         <button 
           onClick={() => updateTimeLeft('short')}
-          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'short' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'short' ? 'bg-indigo-600 text-white shadow-md dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
         >
           Pausa 1
         </button>
         <button 
           onClick={() => updateTimeLeft('long')}
-          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'long' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'long' ? 'bg-indigo-600 text-white shadow-md dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
         >
           Pausa 2
         </button>
@@ -139,7 +138,7 @@ const PomodoroTimer: React.FC = () => {
         <svg className="w-40 h-40 -rotate-90">
           <circle 
             cx="80" cy="80" r={radius} 
-            className="stroke-slate-100" 
+            className="stroke-slate-100 dark:stroke-slate-800" 
             strokeWidth="8" fill="transparent" 
           />
           <circle 
@@ -152,10 +151,10 @@ const PomodoroTimer: React.FC = () => {
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-3xl font-black text-slate-800 tracking-tighter tabular-nums">
+          <span className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter tabular-nums">
             {formatTime(timeLeft)}
           </span>
-          <span className={`text-[9px] font-black uppercase tracking-widest mt-1 ${mode === 'work' ? 'text-indigo-600' : 'text-indigo-400'}`}>
+          <span className={`text-[9px] font-black uppercase tracking-widest mt-1 ${mode === 'work' ? 'text-indigo-600 dark:text-indigo-400' : 'text-indigo-400 dark:text-indigo-500'}`}>
             {mode === 'work' ? 'Concentração' : 'Descanso'}
           </span>
         </div>
@@ -166,8 +165,8 @@ const PomodoroTimer: React.FC = () => {
           onClick={toggleTimer}
           className={`w-full py-3.5 text-xs font-black uppercase rounded-xl transition-all active:scale-[0.98] ${
             isActive 
-              ? 'bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100' 
-              : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700'
+              ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/40 hover:bg-rose-100 dark:hover:bg-rose-900/30' 
+              : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700'
           }`}
         >
           {isActive ? 'Pausar' : 'Iniciar Foco'}
@@ -175,7 +174,7 @@ const PomodoroTimer: React.FC = () => {
         
         <button 
           onClick={resetTimer}
-          className="w-full py-2 text-[9px] font-bold uppercase text-slate-400 hover:text-slate-600 transition-all"
+          className="w-full py-2 text-[9px] font-bold uppercase text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 transition-all"
         >
           Reiniciar Ciclo
         </button>

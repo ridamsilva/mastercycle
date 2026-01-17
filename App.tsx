@@ -19,11 +19,26 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('mastercycle_darkmode');
+    return saved === 'true';
+  });
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
 
   const [modalTotalHours, setModalTotalHours] = useState<number>(1);
   const [modalFrequency, setModalFrequency] = useState<number>(1);
+
+  // Sync dark mode class
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('mastercycle_darkmode', isDarkMode.toString());
+  }, [isDarkMode]);
 
   // Auto-save to localStorage
   useEffect(() => {
@@ -96,7 +111,6 @@ const App: React.FC = () => {
         : candidates[0];
 
       if (selected) {
-        // Sync performance with the latest available data for this subject
         const existingPerformance = cycleItems.find(item => item.subjectId === selected.subjectId)?.performance;
 
         newItems.push({
@@ -104,14 +118,13 @@ const App: React.FC = () => {
           subjectId: selected.subjectId,
           duration: selected.duration,
           completed: false,
-          order: 0, // Will be reindexed
+          order: 0,
           performance: existingPerformance
         });
         selected.remaining--;
       }
     }
 
-    // New items go at the BEGINNING. Reindex everyone.
     const combined = [...newItems, ...cycleItems];
     const reindexed = combined.map((item, index) => ({ ...item, order: index }));
     setCycleItems(reindexed);
@@ -176,13 +189,10 @@ const App: React.FC = () => {
     const targetItem = cycleItems.find(i => i.id === itemId);
     if (!targetItem) return;
 
-    // Synchronize performance across all sessions of the same subject
     setCycleItems(prev => prev.map(item => 
       item.subjectId === targetItem.subjectId ? { ...item, performance: value } : item
     ));
 
-    // Only update mastery via session performance if there are NO topics defined.
-    // If topics exist, topics performance average takes precedence.
     setSubjects(prev => prev.map(s => {
       if (s.id === targetItem.subjectId) {
         const hasTopicsWithPerformance = s.topics && s.topics.some(t => t.performance !== undefined && t.performance !== 0);
@@ -203,7 +213,6 @@ const App: React.FC = () => {
   const updateSubjectTopics = (subjectId: string, topics: Topic[]) => {
     setSubjects(prev => prev.map(s => {
       if (s.id === subjectId) {
-        // Calculate average performance of topics that have a performance value
         const topicsWithPerformance = topics.filter(t => t.performance !== undefined && t.performance > 0);
         let newMastery = s.masteryPercentage;
         
@@ -245,38 +254,57 @@ const App: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const maskUrl = (url: string) => url ? `${url.substring(0, 12)}****${url.slice(-3)}` : "Not Configured";
+  const maskKey = (key: string) => key ? `${key.substring(0, 10)}****${key.slice(-4)}` : "Protected";
+
   return (
-    <div className="min-h-screen pb-12 bg-slate-50 selection:bg-indigo-100">
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div className="min-h-screen pb-12 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 selection:bg-indigo-100 dark:selection:bg-indigo-900">
+      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+            <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200 dark:shadow-none">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z" />
               </svg>
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">MasterCycle</h1>
+                <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">MasterCycle</h1>
                 <div className="group relative flex items-center">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] font-black rounded border border-emerald-100 uppercase tracking-tighter hidden sm:inline-block">
-                    Cloud Active
+                  <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[8px] font-black rounded border border-emerald-100 dark:border-emerald-800 uppercase tracking-tighter hidden sm:inline-block">
+                    Cloud Protected
                   </span>
-                  <div className="absolute left-0 top-full mt-1 px-3 py-2 bg-slate-800 text-white text-[9px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none border border-slate-700">
-                    <p className="font-black text-emerald-400 mb-1">SUPABASE INTEGRATED</p>
-                    <p className="text-slate-400">URL: <span className="text-slate-200">{SUPABASE_URL}</span></p>
-                    <p className="text-slate-400">KEY: <span className="text-slate-200">{SUPABASE_KEY.substring(0, 12)}...{SUPABASE_KEY.slice(-4)}</span></p>
+                  <div className="absolute left-0 top-full mt-1 px-3 py-2 bg-slate-800 dark:bg-slate-700 text-white text-[9px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none border border-slate-700">
+                    <p className="font-black text-emerald-400 mb-1">SECURE BACKEND ACTIVE</p>
+                    <p className="text-slate-400">Endpoint: <span className="text-slate-200">{maskUrl(SUPABASE_URL)}</span></p>
+                    <p className="text-slate-400">Key: <span className="text-slate-200">{maskKey(SUPABASE_KEY)}</span></p>
                   </div>
                 </div>
               </div>
-              <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Estudos de Alta Performance</p>
+              <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest">Estudos de Alta Performance</p>
             </div>
           </div>
-          <div className="flex gap-3">
+          
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all active:scale-95"
+              aria-label="Alternar Tema"
+            >
+              {isDarkMode ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                </svg>
+              )}
+            </button>
             <button 
               onClick={() => openModal(null)}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all active:scale-95"
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-100 dark:shadow-none transition-all active:scale-95"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -290,19 +318,18 @@ const App: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
           <PomodoroTimer />
-          
           <PerformanceRank subjects={subjects} />
 
           <section>
             <div className="flex items-center justify-between mb-4 px-1">
-              <h2 className="text-lg font-black text-slate-800">Disciplinas</h2>
-              <span className="text-[11px] font-bold text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full">
+              <h2 className="text-lg font-black text-slate-800 dark:text-slate-200">Disciplinas</h2>
+              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                 {subjects.length} CADASTRADAS
               </span>
             </div>
             <div className="space-y-4 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
               {subjects.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-400">
+                <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.168.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                   </svg>
@@ -322,8 +349,8 @@ const App: React.FC = () => {
           </section>
 
           {subjects.length > 0 && (
-            <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-              <h2 className="text-sm font-black text-slate-800 mb-6 uppercase tracking-wider">Carga Horária Geral</h2>
+            <section className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h2 className="text-sm font-black text-slate-800 dark:text-slate-200 mb-6 uppercase tracking-wider">Carga Horária Geral</h2>
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -342,10 +369,23 @@ const App: React.FC = () => {
                       ))}
                     </Pie>
                     <Tooltip 
-                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                      contentStyle={{ 
+                        borderRadius: '16px', 
+                        border: 'none', 
+                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', 
+                        fontSize: '12px',
+                        backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                        color: isDarkMode ? '#f8fafc' : '#1e293b'
+                      }}
+                      itemStyle={{ color: isDarkMode ? '#f8fafc' : '#1e293b' }}
                       formatter={(value: number) => [`${value}h`, 'Carga Total']}
                     />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                    <Legend 
+                      verticalAlign="bottom" 
+                      height={36} 
+                      iconType="circle"
+                      formatter={(value) => <span className="text-slate-600 dark:text-slate-400 text-[10px] font-bold">{value}</span>}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -355,7 +395,7 @@ const App: React.FC = () => {
 
         <div className="lg:col-span-8">
           <div className="flex items-center justify-between mb-6 px-1">
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Meu Ciclo</h2>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Meu Ciclo</h2>
           </div>
           
           <CycleList 
@@ -373,13 +413,13 @@ const App: React.FC = () => {
 
       {/* Subject Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <h2 className="text-xl font-black text-slate-800 tracking-tight">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white/10">
+            <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+              <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">
                 {editingSubject ? 'Editar Disciplina' : 'Nova Disciplina'}
               </h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-all">
+              <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -388,20 +428,20 @@ const App: React.FC = () => {
             
             <form onSubmit={handleAddOrEditSubject} className="p-8 space-y-6">
               <div>
-                <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Nome da Disciplina</label>
+                <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Nome da Disciplina</label>
                 <input 
                   name="name"
                   defaultValue={editingSubject?.name}
                   required
                   autoFocus
                   placeholder="Ex: Português, Matemática..."
-                  className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 focus:outline-none transition-all placeholder:text-slate-300 font-medium"
+                  className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-transparent dark:text-white focus:border-indigo-500 focus:outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600 font-medium"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Horas Totais</label>
+                  <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Horas Totais</label>
                   <input 
                     name="totalHours"
                     type="number"
@@ -410,11 +450,11 @@ const App: React.FC = () => {
                     defaultValue={editingSubject?.totalHours || 1}
                     onChange={(e) => setModalTotalHours(parseFloat(e.target.value) || 0)}
                     required
-                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
+                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-transparent dark:text-white focus:border-indigo-500 focus:outline-none transition-all font-bold"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Vezes no Ciclo</label>
+                  <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Vezes no Ciclo</label>
                   <input 
                     name="frequency"
                     type="number"
@@ -422,20 +462,20 @@ const App: React.FC = () => {
                     defaultValue={editingSubject?.frequency || 1}
                     onChange={(e) => setModalFrequency(parseInt(e.target.value) || 1)}
                     required
-                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
+                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-transparent dark:text-white focus:border-indigo-500 focus:outline-none transition-all font-bold"
                   />
                 </div>
               </div>
 
-              <div className="bg-indigo-600/5 p-4 rounded-2xl border-2 border-indigo-100/50 flex items-center justify-between">
-                <span className="text-xs font-bold text-indigo-700">Duração prevista por sessão:</span>
-                <span className="text-lg font-black text-indigo-800">{(modalTotalHours / modalFrequency).toFixed(2)}h</span>
+              <div className="bg-indigo-600/5 dark:bg-indigo-600/10 p-4 rounded-2xl border-2 border-indigo-100/50 dark:border-indigo-900/50 flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400">Duração prevista por sessão:</span>
+                <span className="text-lg font-black text-indigo-800 dark:text-indigo-300">{(modalTotalHours / modalFrequency).toFixed(2)}h</span>
               </div>
 
               <div>
-                <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2 flex justify-between">
+                <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 flex justify-between">
                   Domínio Base (%)
-                  <span id="mastery-val" className="text-indigo-600 font-black">{editingSubject?.masteryPercentage || 0}%</span>
+                  <span id="mastery-val" className="text-indigo-600 dark:text-indigo-400 font-black">{editingSubject?.masteryPercentage || 0}%</span>
                 </label>
                 <input 
                   name="mastery"
@@ -443,7 +483,7 @@ const App: React.FC = () => {
                   min="0"
                   max="100"
                   defaultValue={editingSubject?.masteryPercentage || 0}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                  className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                   onChange={(e) => {
                     const label = document.getElementById('mastery-val');
                     if (label) label.innerText = `${e.target.value}%`;
@@ -452,13 +492,13 @@ const App: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2">Link Base de Material</label>
+                <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Link Base de Material</label>
                 <input 
                   name="notebookUrl"
                   type="text"
                   defaultValue={editingSubject?.notebookUrl}
                   placeholder="Ex: drive.google.com/..."
-                  className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 focus:outline-none transition-all placeholder:text-slate-300 text-sm"
+                  className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-transparent dark:text-white focus:border-indigo-500 focus:outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600 text-sm"
                 />
               </div>
 
@@ -466,13 +506,13 @@ const App: React.FC = () => {
                 <button 
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-4 text-sm font-black text-slate-500 bg-slate-100 rounded-2xl hover:bg-slate-200 transition-all active:scale-95 uppercase tracking-wider"
+                  className="flex-1 py-4 text-sm font-black text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95 uppercase tracking-wider"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 py-4 text-sm font-black text-white bg-indigo-600 rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 uppercase tracking-wider"
+                  className="flex-1 py-4 text-sm font-black text-white bg-indigo-600 rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 dark:shadow-none transition-all active:scale-95 uppercase tracking-wider"
                 >
                   {editingSubject ? 'Salvar Disciplina' : 'Adicionar agora'}
                 </button>
