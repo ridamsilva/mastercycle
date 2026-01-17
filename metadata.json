@@ -1,0 +1,5 @@
+{
+  "name": "ciclo de estudos",
+  "description": "Um aplicativo avançado para gerenciamento de ciclos de estudos, permitindo configurar carga horária, frequência, links de cadernos e monitoramento de desempenho com auxílio de IA.",
+  "requestFramePermissions": []
+}
