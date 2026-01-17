@@ -11,3 +11,6 @@ export const COLORS = [
 ];
 
 export const INITIAL_SUBJECTS: any[] = [];
+
+export const SUPABASE_URL = "https://oejhdhtfbsdrihaojkmn.supabase.co";
+export const SUPABASE_KEY = "sb_publishable_8u_p2CpKrxIh7aUgJstNmw_FD1N47ma";

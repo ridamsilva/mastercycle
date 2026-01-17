@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Subject, CycleItem, Topic } from './types';
-import { COLORS } from './constants';
+import { COLORS, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import SubjectCard from './components/SubjectCard';
 import CycleList from './components/CycleList';
 import PomodoroTimer from './components/PomodoroTimer';
@@ -255,8 +255,21 @@ const App: React.FC = () => {
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z" />
               </svg>
             </div>
-            <div>
-              <h1 className="text-xl font-black text-slate-900 tracking-tight">MasterCycle</h1>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-black text-slate-900 tracking-tight">MasterCycle</h1>
+                <div className="group relative flex items-center">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] font-black rounded border border-emerald-100 uppercase tracking-tighter hidden sm:inline-block">
+                    Cloud Active
+                  </span>
+                  <div className="absolute left-0 top-full mt-1 px-3 py-2 bg-slate-800 text-white text-[9px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none border border-slate-700">
+                    <p className="font-black text-emerald-400 mb-1">SUPABASE INTEGRATED</p>
+                    <p className="text-slate-400">URL: <span className="text-slate-200">{SUPABASE_URL}</span></p>
+                    <p className="text-slate-400">KEY: <span className="text-slate-200">{SUPABASE_KEY.substring(0, 12)}...{SUPABASE_KEY.slice(-4)}</span></p>
+                  </div>
+                </div>
+              </div>
               <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Estudos de Alta Performance</p>
             </div>
           </div>
