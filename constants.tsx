@@ -12,6 +12,6 @@ export const COLORS = [
 
 export const INITIAL_SUBJECTS: any[] = [];
 
-// Proteção de chaves via variáveis de ambiente
-export const SUPABASE_URL = process.env.SUPABASE_URL || "";
-export const SUPABASE_KEY = process.env.SUPABASE_KEY || "";
+// Credenciais Supabase
+export const SUPABASE_URL = "https://oejhdhtfbsdrihaojkmn.supabase.co";
+export const SUPABASE_KEY = "sb_publishable_8u_p2CpKrxIh7aUgJstNmw_FD1N47ma";

@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Subject, CycleItem, Topic } from './types';
-import { COLORS, SUPABASE_URL, SUPABASE_KEY } from './constants';
+import { COLORS } from './constants';
 import SubjectCard from './components/SubjectCard';
 import CycleList from './components/CycleList';
 import PomodoroTimer from './components/PomodoroTimer';
 import PerformanceRank from './components/PerformanceRank';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { supabaseService } from './services/supabaseService';
 
 const App: React.FC = () => {
   const [subjects, setSubjects] = useState<Subject[]>(() => {
@@ -24,13 +25,39 @@ const App: React.FC = () => {
     return saved === 'true';
   });
 
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error' | 'success'>('idle');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
 
   const [modalTotalHours, setModalTotalHours] = useState<number>(1);
   const [modalFrequency, setModalFrequency] = useState<number>(1);
 
-  // Sync dark mode class
+  // Sync with Supabase on mount
+  useEffect(() => {
+    const loadRemoteData = async () => {
+      setSyncStatus('syncing');
+      try {
+        const remoteSubjects = await supabaseService.fetchSubjects();
+        const remoteItems = await supabaseService.fetchCycleItems();
+        
+        if (remoteSubjects && remoteSubjects.length > 0) {
+          setSubjects(remoteSubjects);
+        }
+        if (remoteItems && remoteItems.length > 0) {
+          setCycleItems(remoteItems);
+        }
+        setSyncStatus('success');
+      } catch (e) {
+        setSyncStatus('error');
+      } finally {
+        setIsInitialLoadDone(true);
+      }
+    };
+    loadRemoteData();
+  }, []);
+
+  // Sync dark mode
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -40,11 +67,36 @@ const App: React.FC = () => {
     localStorage.setItem('mastercycle_darkmode', isDarkMode.toString());
   }, [isDarkMode]);
 
-  // Auto-save to localStorage
+  // Save to LocalStorage and Supabase
   useEffect(() => {
+    // Só tentamos sincronizar se o carregamento inicial da nuvem já terminou
+    if (!isInitialLoadDone) return;
+
     localStorage.setItem('mastercycle_subjects', JSON.stringify(subjects));
     localStorage.setItem('mastercycle_items', JSON.stringify(cycleItems));
-  }, [subjects, cycleItems]);
+    
+    const syncWithCloud = async () => {
+      setSyncStatus('syncing');
+      try {
+        if (subjects.length > 0) {
+          // Salvamos matérias primeiro por causa das Foreign Keys
+          for (const s of subjects) {
+            await supabaseService.upsertSubject(s);
+          }
+        }
+        if (cycleItems.length > 0) {
+          await supabaseService.upsertCycleItems(cycleItems);
+        }
+        setSyncStatus('success');
+      } catch (error) {
+        console.error("Erro na sincronização auto-save:", error);
+        setSyncStatus('error');
+      }
+    };
+
+    const timer = setTimeout(syncWithCloud, 1500); 
+    return () => clearTimeout(timer);
+  }, [subjects, cycleItems, isInitialLoadDone]);
 
   const generateCycle = useCallback((currentSubjects: Subject[]) => {
     if (currentSubjects.length === 0) {
@@ -65,10 +117,8 @@ const App: React.FC = () => {
 
     for (let i = 0; i < totalSlots; i++) {
       const lastId = newItems.length > 0 ? newItems[newItems.length - 1].subjectId : null;
-      
       let candidates = tempPool.filter(p => p.remaining > 0);
       let filtered = candidates.filter(p => p.subjectId !== lastId);
-      
       let selected = filtered.length > 0 
         ? filtered.sort((a, b) => b.remaining - a.remaining)[0]
         : candidates[0];
@@ -90,29 +140,22 @@ const App: React.FC = () => {
 
   const appendCycle = () => {
     if (subjects.length === 0) return;
-
     const newItems: CycleItem[] = [];
     const tempPool = subjects.map(s => ({
       subjectId: s.id,
       remaining: s.frequency,
       duration: parseFloat((s.totalHours / s.frequency).toFixed(2))
     }));
-
     const totalSlots = subjects.reduce((acc, s) => acc + s.frequency, 0);
 
     for (let i = 0; i < totalSlots; i++) {
       const lastId = newItems.length > 0 ? newItems[newItems.length - 1].subjectId : null;
-      
       let candidates = tempPool.filter(p => p.remaining > 0);
       let filtered = candidates.filter(p => p.subjectId !== lastId);
-      
-      let selected = filtered.length > 0 
-        ? filtered.sort((a, b) => b.remaining - a.remaining)[0]
-        : candidates[0];
+      let selected = filtered.length > 0 ? filtered.sort((a, b) => b.remaining - a.remaining)[0] : candidates[0];
 
       if (selected) {
         const existingPerformance = cycleItems.find(item => item.subjectId === selected.subjectId)?.performance;
-
         newItems.push({
           id: `${selected.subjectId}-${Date.now()}-${i}`,
           subjectId: selected.subjectId,
@@ -124,7 +167,6 @@ const App: React.FC = () => {
         selected.remaining--;
       }
     }
-
     const combined = [...newItems, ...cycleItems];
     const reindexed = combined.map((item, index) => ({ ...item, order: index }));
     setCycleItems(reindexed);
@@ -163,11 +205,12 @@ const App: React.FC = () => {
     setEditingSubject(null);
   };
 
-  const deleteSubject = (id: string) => {
+  const deleteSubject = async (id: string) => {
     if (confirm("Deseja realmente excluir esta disciplina? Isso a removerá do ciclo atual.")) {
       const updated = subjects.filter(s => s.id !== id);
       setSubjects(updated);
       setCycleItems(prev => prev.filter(item => item.subjectId !== id));
+      await supabaseService.deleteSubject(id);
     }
   };
 
@@ -215,12 +258,10 @@ const App: React.FC = () => {
       if (s.id === subjectId) {
         const topicsWithPerformance = topics.filter(t => t.performance !== undefined && t.performance > 0);
         let newMastery = s.masteryPercentage;
-        
         if (topicsWithPerformance.length > 0) {
           const sum = topicsWithPerformance.reduce((acc, t) => acc + (t.performance || 0), 0);
           newMastery = Math.round(sum / topicsWithPerformance.length);
         }
-        
         return { ...s, topics, masteryPercentage: newMastery };
       }
       return s;
@@ -231,10 +272,8 @@ const App: React.FC = () => {
     const current = [...cycleItems].sort((a, b) => a.order - b.order);
     const draggedIdx = current.findIndex(i => i.id === draggedId);
     const targetIdx = current.findIndex(i => i.id === targetId);
-    
     const [draggedItem] = current.splice(draggedIdx, 1);
     current.splice(targetIdx, 0, draggedItem);
-    
     const updated = current.map((item, index) => ({ ...item, order: index }));
     setCycleItems(updated);
   };
@@ -254,9 +293,6 @@ const App: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const maskUrl = (url: string) => url ? `${url.substring(0, 12)}****${url.slice(-3)}` : "Not Configured";
-  const maskKey = (key: string) => key ? `${key.substring(0, 10)}****${key.slice(-4)}` : "Protected";
-
   return (
     <div className="min-h-screen pb-12 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 selection:bg-indigo-100 dark:selection:bg-indigo-900">
       <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 shadow-sm">
@@ -270,16 +306,23 @@ const App: React.FC = () => {
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">MasterCycle</h1>
-                <div className="group relative flex items-center">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[8px] font-black rounded border border-emerald-100 dark:border-emerald-800 uppercase tracking-tighter hidden sm:inline-block">
-                    Cloud Protected
+                {/* Cloud Sync Status Indicator */}
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-500 ${
+                  syncStatus === 'syncing' ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800' :
+                  syncStatus === 'error' ? 'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-800' :
+                  'bg-indigo-50 border-indigo-100 dark:bg-indigo-950 dark:border-indigo-900'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${
+                    syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : 
+                    syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'
+                  }`} />
+                  <span className={`text-[10px] font-bold uppercase tracking-tighter ${
+                    syncStatus === 'syncing' ? 'text-amber-700 dark:text-amber-400' : 
+                    syncStatus === 'error' ? 'text-rose-700 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400'
+                  }`}>
+                    {syncStatus === 'syncing' ? 'Salvando...' : 
+                     syncStatus === 'error' ? 'Erro Cloud' : 'Cloud Ativa'}
                   </span>
-                  <div className="absolute left-0 top-full mt-1 px-3 py-2 bg-slate-800 dark:bg-slate-700 text-white text-[9px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none border border-slate-700">
-                    <p className="font-black text-emerald-400 mb-1">SECURE BACKEND ACTIVE</p>
-                    <p className="text-slate-400">Endpoint: <span className="text-slate-200">{maskUrl(SUPABASE_URL)}</span></p>
-                    <p className="text-slate-400">Key: <span className="text-slate-200">{maskKey(SUPABASE_KEY)}</span></p>
-                  </div>
                 </div>
               </div>
               <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest">Estudos de Alta Performance</p>
