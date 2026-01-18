@@ -24,9 +24,8 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, onDelete, onEdit }) 
   };
 
   const handleDelete = () => {
-    if (window.confirm(`Deseja realmente excluir "${subject.name.toUpperCase()}"? Esta ação removerá a disciplina e todos os seus registros do ciclo atual.`)) {
-      onDelete(subject.id);
-    }
+    // Apenas chama o onDelete; a confirmação agora é feita centralizada no App.tsx
+    onDelete(subject.id);
   };
 
   return (

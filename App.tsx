@@ -200,7 +200,11 @@ const App: React.FC = () => {
   };
 
   const deleteSubject = async (id: string) => {
-    if (!confirm(`Deseja realmente excluir esta disciplina? Ela será removida de todos os ciclos não concluídos.`)) return;
+    // Apenas UMA confirmação aqui
+    const subjectToDelete = subjects.find(s => s.id === id);
+    if (!subjectToDelete) return;
+
+    if (!confirm(`Deseja realmente excluir "${subjectToDelete.name.toUpperCase()}"? Esta ação removerá a disciplina de todos os ciclos não concluídos.`)) return;
     
     setSubjects(prev => prev.filter(s => s.id !== id));
     // Remove do ciclo apenas itens que NÃO foram concluídos
