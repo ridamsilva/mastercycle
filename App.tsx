@@ -53,7 +53,7 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Hydration logic
+  // Hydration logic - Prioriza Cloud, evita sobrescrita acidental
   useEffect(() => {
     if (!session || isInitialLoadRef.current) return;
 
@@ -63,6 +63,7 @@ const App: React.FC = () => {
         const cloudSubjects = await supabaseService.fetchSubjects();
         const cloudItems = await supabaseService.fetchCycleItems();
 
+        // Se houver dados na nuvem, ignoramos o local storage para evitar conflitos
         if (cloudSubjects && cloudSubjects.length > 0) {
           setSubjects(cloudSubjects);
         } else {
@@ -78,6 +79,7 @@ const App: React.FC = () => {
         }
 
         setSyncStatus('success');
+        // Apenas após carregar tudo, permitimos o Auto-save
         isInitialLoadRef.current = true;
       } catch (e) {
         setSyncStatus('error');
@@ -87,7 +89,7 @@ const App: React.FC = () => {
     hydrate();
   }, [session]);
 
-  // Enhanced Autosave
+  // Enhanced Autosave - Só roda se isInitialLoadRef for true
   useEffect(() => {
     if (!isInitialLoadRef.current || !session) return;
 
@@ -114,14 +116,14 @@ const App: React.FC = () => {
     localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
   }, [isDarkMode]);
 
-  // GERAÇÃO DE CICLO INTELIGENTE COM PRESERVAÇÃO DE ESTADO
+  // GERAÇÃO DE CICLO INTELIGENTE COM PRESERVAÇÃO DE ESTADO E IDs ESTÁVEIS
   const generateCycle = useCallback(async (currentSubjects: Subject[], prevItems: CycleItem[] = [], resetCompleted = false) => {
     if (currentSubjects.length === 0) {
       setCycleItems([]);
       return;
     }
 
-    // Agrupa itens anteriores por subjectId para preservar estado por ocorrência
+    // Mapeamento por ocorrência: Salva o estado da 1ª vez que viu Matemática, 2ª vez, etc.
     const prevItemsMap: Record<string, CycleItem[]> = {};
     prevItems.forEach(item => {
       if (!prevItemsMap[item.subjectId]) prevItemsMap[item.subjectId] = [];
@@ -142,6 +144,8 @@ const App: React.FC = () => {
     for (let i = 0; i < totalSlots; i++) {
       let lastId: string | null = newItems.length > 0 ? newItems[newItems.length - 1].subjectId : null;
       let candidates = tempPool.filter(p => p.remaining > 0);
+      
+      // Tenta não repetir a mesma matéria em sequência
       let filtered = candidates.filter(p => p.subjectId !== lastId);
       let selected = filtered.length > 0 
         ? filtered.sort((a, b) => b.remaining - a.remaining)[0] 
@@ -154,13 +158,12 @@ const App: React.FC = () => {
         const subConfig = currentSubjects.find(s => s.id === sId);
 
         newItems.push({
-          // ID DETERMINÍSTICO PARA EVITAR DUPLICATAS
+          // ID FIXO POR POSIÇÃO: IMPEDE DUPLICIDADE NO SUPABASE UPSERT
           id: `slot-${i}`, 
           subjectId: sId,
           duration: selected.duration,
           completed: resetCompleted ? false : (existing?.completed || false),
           order: i,
-          // Prefere o link do bloco anterior, senão o link fixo da matéria
           sessionUrl: existing?.sessionUrl || subConfig?.notebookUrl || "",
           performance: resetCompleted ? undefined : existing?.performance,
           completedAt: resetCompleted ? undefined : existing?.completedAt
@@ -177,19 +180,19 @@ const App: React.FC = () => {
   const handleUpdateUrl = (itemId: string, url: string) => {
     const item = cycleItems.find(i => i.id === itemId);
     if (!item) return;
-    
-    // Atualiza no Ciclo (em todos os blocos da mesma matéria)
     setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, sessionUrl: url } : i));
-    
-    // Atualiza na configuração base da Subject para persistência futura
     setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, notebookUrl: url } : s));
   };
 
   const handleUpdatePerformance = (itemId: string, val: number) => {
     const item = cycleItems.find(i => i.id === itemId);
     if (!item) return;
-    setCycleItems(prev => prev.map(i => i.id === itemId ? { ...i, performance: val } : i));
-    setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, masteryPercentage: val } : s));
+    
+    // LIMITE DE 100% GARANTIDO
+    const cappedValue = Math.min(100, Math.max(0, val));
+    
+    setCycleItems(prev => prev.map(i => i.id === itemId ? { ...i, performance: cappedValue } : i));
+    setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, masteryPercentage: cappedValue } : s));
   };
 
   const handleAddOrEditSubject = (e: React.FormEvent<HTMLFormElement>) => {
@@ -226,7 +229,7 @@ const App: React.FC = () => {
     }
     setSubjects(updated);
     
-    // Gera novo ciclo preservando marcações anteriores
+    // Preserva o progresso ao regenerar
     generateCycle(updated, cycleItems);
     setIsModalOpen(false);
   };
@@ -288,7 +291,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-1.5 mt-2">
               <div className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
               <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">
-                {syncStatus === 'syncing' ? 'Salvando' : syncStatus === 'error' ? 'Erro de Sinc' : 'Nuvem OK'}
+                {syncStatus === 'syncing' ? 'Salvando' : syncStatus === 'error' ? 'Erro' : 'Cloud On'}
               </span>
             </div>
           </div>

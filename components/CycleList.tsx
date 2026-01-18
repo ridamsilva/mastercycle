@@ -199,11 +199,12 @@ const CycleList: React.FC<CycleListProps> = ({
                     )}
                   </div>
 
-                  {/* CAMPO DE DESEMPENHO ATUALIZADO: % COLADO AO NÚMERO */}
                   <div className="flex justify-center">
                     <div className={`flex items-center justify-center w-full max-w-[85px] h-10 rounded-xl transition-all border-2 border-transparent focus-within:border-brand-blue ${getPerformanceStyles(item.performance)}`}>
                       <input 
                         type="number" 
+                        min="0"
+                        max="100"
                         value={item.performance ?? ""} 
                         placeholder="--" 
                         onChange={e => onUpdatePerformance(item.id, Number(e.target.value))}
