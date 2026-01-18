@@ -20,14 +20,15 @@ export const supabaseService = {
   },
 
   async getSession() {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session;
+    const { data } = await supabase.auth.getSession();
+    return data?.session ?? null;
   },
 
   // --- DATA ---
   async fetchSubjects(): Promise<Subject[] | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
       if (!user) return null;
 
       const { data, error } = await supabase
@@ -55,7 +56,8 @@ export const supabaseService = {
 
   async upsertSubjects(subjects: Subject[]) {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
       if (!user || subjects.length === 0) return;
 
       const formattedSubjects = subjects.map(s => ({
@@ -82,7 +84,8 @@ export const supabaseService = {
 
   async deleteSubject(id: string) {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
       if (!user) return;
 
       const { error } = await supabase
@@ -100,7 +103,8 @@ export const supabaseService = {
 
   async fetchCycleItems(): Promise<CycleItem[] | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
       if (!user) return null;
 
       const { data, error } = await supabase
@@ -129,7 +133,8 @@ export const supabaseService = {
 
   async upsertCycleItems(items: CycleItem[]) {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
       if (!user || items.length === 0) return;
       
       const formattedItems = items.map(item => ({

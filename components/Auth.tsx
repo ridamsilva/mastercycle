@@ -12,7 +12,6 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,16 +19,18 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
     setError(null);
 
     try {
-      const { data, error: authError } = isLogin 
+      const response = isLogin 
         ? await supabaseService.signIn(email, password)
         : await supabaseService.signUp(email, password);
 
+      const { data, error: authError } = response;
+
       if (authError) throw authError;
       
-      if (!isLogin && data.user && !data.session) {
+      if (!isLogin && data?.user && !data?.session) {
         setError('🎉 Conta criada com sucesso! Por favor, confirme seu e-mail para ativar seu acesso.');
         setIsLogin(true);
-      } else if (data.session) {
+      } else if (data?.session) {
         onSuccess(data.session);
       }
     } catch (err: any) {
@@ -152,7 +153,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
                   </svg>
                 </div>
                 <input 
-                  type={showPassword ? "text" : "password"} 
+                  type="password" 
                   required 
                   minLength={6}
                   value={password}

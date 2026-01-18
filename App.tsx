@@ -35,7 +35,7 @@ const App: React.FC = () => {
     let mounted = true;
     const checkInitialSession = async () => {
       try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const currentSession = await supabaseService.getSession();
         if (mounted) {
           setSession(currentSession);
           setIsCheckingAuth(false);
@@ -45,7 +45,7 @@ const App: React.FC = () => {
       }
     };
     checkInitialSession();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
       if (mounted) {
         setSession(newSession);
         if (!newSession) {
@@ -55,9 +55,10 @@ const App: React.FC = () => {
         }
       }
     });
+    const subscription = data?.subscription;
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
@@ -109,7 +110,6 @@ const App: React.FC = () => {
     return `hsl(${hue}, 70%, 50%)`;
   };
 
-  // Lógica de Geração: Intercala matérias para evitar repetição adjacente
   const distributeSubjects = useCallback((currentSubjects: Subject[], startOrder: number = 0): CycleItem[] => {
     const newItems: CycleItem[] = [];
     const tempPool = currentSubjects.map(s => ({
@@ -130,7 +130,6 @@ const App: React.FC = () => {
       let candidates = tempPool.filter(p => p.remaining > 0);
       let filtered = candidates.filter(p => p.subjectId !== lastId);
       
-      // Escolhe o candidato com mais "restante" para forçar a distribuição
       let selected = filtered.length > 0 
         ? filtered.sort((a, b) => b.remaining - a.remaining)[0] 
         : candidates[0];
@@ -224,6 +223,19 @@ const App: React.FC = () => {
     }
     setIsModalOpen(true);
   };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-6 animate-pulse">
+          <div className="w-16 h-16 border-t-4 border-indigo-600 rounded-full animate-spin" />
+          <h2 className="text-sm font-black text-indigo-600 uppercase tracking-widest">MasterCycle</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) return <Auth onSuccess={(s) => setSession(s)} />;
 
   return (
     <div className="min-h-screen pb-12 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 font-inter">
@@ -329,7 +341,6 @@ const App: React.FC = () => {
             onAppendCycle={() => {
               const lastOrder = cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) : 0;
               
-              // NOVO: Segue a ordem personalizada do ciclo atual se houver
               if (cycleItems.length > 0) {
                 const currentSequence = [...cycleItems].sort((a,b) => a.order - b.order);
                 const newItems = currentSequence.map((item, index) => ({
@@ -341,7 +352,6 @@ const App: React.FC = () => {
                 }));
                 setCycleItems([...cycleItems, ...newItems]);
               } else {
-                // Caso contrário usa a distribuição inteligente básica
                 const newItems = distributeSubjects(subjects, lastOrder + 1);
                 setCycleItems([...cycleItems, ...newItems]);
               }
@@ -353,7 +363,7 @@ const App: React.FC = () => {
 
       {isProfileOpen && (
         <UserProfile 
-          user={session.user}
+          user={session?.user}
           subjects={subjects}
           cycleItems={cycleItems}
           onClose={() => setIsProfileOpen(false)}
