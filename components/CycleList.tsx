@@ -17,7 +17,6 @@ const CycleRow = React.memo(({
   item, idx, sub, isExpanded, isEditingUrl, totalCount,
   onToggle, onExpand, onEditUrl, onUpdatePerf, onMove, onUpdateUrl 
 }: any) => {
-  // Preferência: Dados ativos (sub) -> Dados persistidos (item.subjectName) -> Fallback
   const displayName = sub?.name || item.subjectName || 'Disciplina Excluída';
   const displayColor = sub?.color || item.subjectColor || '#cbd5e1';
 
@@ -113,6 +112,8 @@ const CycleList: React.FC<CycleListProps> = ({
   const pendingCount = activeItems.length;
   const isFirstCycle = items.length === 0;
 
+  const showAddButton = isFirstCycle || pendingCount === 0;
+
   return (
     <div className="space-y-8 pb-20">
       <div className="bg-white dark:bg-slate-900 p-6 sm:p-10 rounded-[40px] shadow-[0_8px_40px_rgba(0,0,0,0.03)] border border-slate-100 dark:border-slate-800">
@@ -120,24 +121,30 @@ const CycleList: React.FC<CycleListProps> = ({
           <div className="space-y-2">
             <div className="flex items-center gap-3">
                <div className="w-2 h-8 bg-brand-blue rounded-full"></div>
-               <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none bg-brand-blue text-white px-2 py-1">
+               <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">
                  CICLO ATUAL
                </h2>
             </div>
-            <div className="inline-block bg-indigo-600 text-white px-2 py-1 rounded-sm">
+            <div className="inline-block border-2 border-brand-blue/20 text-brand-blue dark:text-blue-400 px-3 py-1 rounded-full">
                <p className="text-[10px] sm:text-[12px] font-black uppercase tracking-tight">
                  PENDENTES: {pendingCount} DE {totalCount}
                </p>
             </div>
           </div>
           
-          <button 
-            onClick={onAppendCycle} 
-            disabled={subjects.length === 0}
-            className="px-8 py-4 bg-brand-orange text-white rounded-2xl text-[11px] font-black uppercase shadow-xl shadow-orange-100 dark:shadow-none hover:scale-105 active:scale-95 transition-all disabled:opacity-20 disabled:scale-100"
-          >
-            {isFirstCycle ? 'Iniciar Primeiro Ciclo' : 'Adicionar Novo Ciclo'}
-          </button>
+          {showAddButton ? (
+            <button 
+              onClick={onAppendCycle} 
+              disabled={subjects.length === 0}
+              className="px-8 py-4 bg-brand-orange text-white rounded-2xl text-[11px] font-black uppercase shadow-xl shadow-orange-100 dark:shadow-none hover:scale-105 active:scale-95 transition-all disabled:opacity-20 disabled:scale-100 animate-in zoom-in duration-300"
+            >
+              {isFirstCycle ? 'Iniciar Primeiro Ciclo' : 'Adicionar Novo Ciclo'}
+            </button>
+          ) : (
+            <div className="hidden sm:block text-[10px] font-black text-slate-300 uppercase tracking-widest text-right">
+              Conclua as pendentes<br/>para liberar novo ciclo
+            </div>
+          )}
         </div>
         
         {items.length > 0 ? (
@@ -180,13 +187,17 @@ const CycleList: React.FC<CycleListProps> = ({
           </div>
         ) : subjects.length > 0 && items.length === 0 ? (
            <div className="py-24 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[40px] text-center">
-            <p className="text-sm font-black uppercase tracking-[0.2em] opacity-30 text-slate-400">Clique em 'Adicionar Novo Ciclo' para gerar seu plano</p>
+            <p className="text-sm font-black uppercase tracking-[0.2em] opacity-30 text-slate-400">Clique em 'Iniciar Ciclo' para gerar seu plano</p>
           </div>
         ) : subjects.length === 0 ? (
           <div className="py-24 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[40px] text-center">
             <p className="text-sm font-black uppercase tracking-[0.2em] opacity-30 text-slate-400">Cadastre suas disciplinas ao lado primeiro</p>
           </div>
-        ) : null}
+        ) : (
+          <div className="py-12 text-center">
+             <p className="text-[11px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">✨ Parabéns! Ciclo 100% Concluído. ✨</p>
+          </div>
+        )}
 
         {completedItemsForCurrentCycle.length > 0 && (
           <div className="space-y-4">
@@ -196,7 +207,7 @@ const CycleList: React.FC<CycleListProps> = ({
             >
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span>Concluídos neste Bloco ({completedItemsForCurrentCycle.length})</span>
+                <span>Sessões Finalizadas ({completedItemsForCurrentCycle.length})</span>
               </div>
               <span className="text-brand-blue">{showHistory ? 'Ocultar Detalhes' : 'Ver Detalhes'}</span>
             </button>
