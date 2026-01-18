@@ -153,6 +153,22 @@ export const supabaseService = {
     } catch {}
   },
 
+  async deleteHistoryEntries(ids: string[]) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      await supabase.from('study_history').delete().in('id', ids).eq('user_id', session.user.id);
+    } catch {}
+  },
+
+  async clearAllHistory() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      await supabase.from('study_history').delete().eq('user_id', session.user.id);
+    } catch {}
+  },
+
   async deleteSubject(id: string) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;

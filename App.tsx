@@ -90,7 +90,6 @@ const App: React.FC = () => {
     localStorage.setItem('m_dark', String(isDarkMode));
   }, [isDarkMode]);
 
-  // Função para gerar as sessões de um ciclo
   const createNewSessions = useCallback((currentSubjects: Subject[], lastOrder: number) => {
     const newCycleId = `cycle-${Date.now()}`;
     const pool = currentSubjects.flatMap(s => {
@@ -121,7 +120,6 @@ const App: React.FC = () => {
   const handleAddNewCycle = useCallback(async () => {
     const done = cycleItems.filter(i => i.completed);
     
-    // 1. Salva o snapshot no histórico permanente para segurança dos dados
     if (done.length > 0) {
       const avg = Math.round(done.reduce((a, i) => a + (i.performance || 0), 0) / done.length);
       const entry: CycleHistoryEntry = { 
@@ -140,7 +138,6 @@ const App: React.FC = () => {
       if (session) supabaseService.saveHistoryEntry(entry);
     }
 
-    // 2. Anexa novas sessões ao ciclo atual SEM remover as concluídas
     const maxOrder = cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) : 0;
     const newSessions = createNewSessions(subjects, maxOrder);
     
@@ -180,12 +177,25 @@ const App: React.FC = () => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const name = String(fd.get('name')).trim();
-    const freq = Number(fd.get('frequency'));
-    const hours = Number(fd.get('totalHours'));
+    const freq = Math.max(1, Number(fd.get('frequency')));
+    const hours = Math.max(0, Number(fd.get('totalHours')));
     const url = String(fd.get('notebookUrl'));
 
     if (editingSubject) {
       setSubjects(p => p.map(s => s.id === editingSubject.id ? { ...s, name, totalHours: hours, frequency: freq, notebookUrl: url } : s));
+      
+      // Propaga a edição para o Ciclo Atual imediatamente
+      const newDuration = Number((hours / freq).toFixed(2));
+      setCycleItems(prev => prev.map(item => {
+        if (item.subjectId === editingSubject.id) {
+          return {
+            ...item,
+            subjectName: name,
+            duration: newDuration
+          };
+        }
+        return item;
+      }));
     } else {
       const newSub: Subject = { 
         id: generateId('sub'), 
@@ -199,7 +209,6 @@ const App: React.FC = () => {
       };
       setSubjects(p => [...p, newSub]);
       
-      // Adiciona as sessões da nova matéria ao ciclo atual imediatamente
       const dur = Number((hours / freq).toFixed(2));
       const startOrder = cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) + 1 : 0;
       const newSessions: CycleItem[] = Array.from({ length: freq }, (_, i) => ({
@@ -223,6 +232,17 @@ const App: React.FC = () => {
     setSubjects(p => p.filter(s => s.id !== id));
     setCycleItems(p => p.filter(i => i.subjectId !== id || i.completed));
     if (session) supabaseService.deleteSubject(id);
+  }, [session]);
+
+  const handleDeleteHistory = useCallback(async (ids: string[]) => {
+    setHistory(prev => prev.filter(h => !ids.includes(h.id)));
+    if (session) supabaseService.deleteHistoryEntries(ids);
+  }, [session]);
+
+  const handleClearHistory = useCallback(async () => {
+    if (!confirm("Isso apagará TODO o seu histórico de estudos permanentemente. Deseja continuar?")) return;
+    setHistory([]);
+    if (session) supabaseService.clearAllHistory();
   }, [session]);
 
   if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-brand-blue font-black animate-pulse">CARREGANDO...</div>;
@@ -265,7 +285,18 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {isStatsOpen && <UserProfile subjects={subjects} cycleItems={cycleItems} history={history} onClose={() => setIsStatsOpen(false)} onSelectHistory={setSelectedHistory} />}
+      {isStatsOpen && (
+        <UserProfile 
+          subjects={subjects} 
+          cycleItems={cycleItems} 
+          history={history} 
+          onClose={() => setIsStatsOpen(false)} 
+          onSelectHistory={setSelectedHistory}
+          onDeleteHistory={handleDeleteHistory}
+          onClearHistory={handleClearHistory}
+        />
+      )}
+      
       {selectedHistory && <HistoryDetail entry={selectedHistory} subjects={subjects} onClose={() => setSelectedHistory(null)} />}
 
       {isModalOpen && (

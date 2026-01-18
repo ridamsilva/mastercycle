@@ -17,8 +17,9 @@ const CycleRow = React.memo(({
   item, idx, sub, isExpanded, isEditingUrl, totalCount,
   onToggle, onExpand, onEditUrl, onUpdatePerf, onMove, onUpdateUrl 
 }: any) => {
-  const displayName = item.subjectName || sub?.name || 'Disciplina Excluída';
-  const displayColor = item.subjectColor || sub?.color || '#cbd5e1';
+  // Preferência: Dados ativos (sub) -> Dados persistidos (item.subjectName) -> Fallback
+  const displayName = sub?.name || item.subjectName || 'Disciplina Excluída';
+  const displayColor = sub?.color || item.subjectColor || '#cbd5e1';
 
   const getPerformanceStyles = (val: number | undefined) => {
     if (val === undefined || val === null || isNaN(val)) return 'bg-slate-100 dark:bg-slate-800 text-slate-400';
@@ -105,7 +106,6 @@ const CycleList: React.FC<CycleListProps> = ({
   const [editingUrlId, setEditingUrlId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(true);
 
-  // Ordenação por ID (ou ordem de adição) para manter a coerência visual das pendentes
   const activeItems = useMemo(() => items.filter(i => !i.completed).sort((a, b) => a.order - b.order), [items]);
   const completedItemsForCurrentCycle = useMemo(() => items.filter(i => i.completed).sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)), [items]);
 
@@ -124,7 +124,6 @@ const CycleList: React.FC<CycleListProps> = ({
                  CICLO ATUAL
                </h2>
             </div>
-            {/* Rótulo Estilo Imagem */}
             <div className="inline-block bg-indigo-600 text-white px-2 py-1 rounded-sm">
                <p className="text-[10px] sm:text-[12px] font-black uppercase tracking-tight">
                  PENDENTES: {pendingCount} DE {totalCount}
@@ -147,7 +146,7 @@ const CycleList: React.FC<CycleListProps> = ({
               <div 
                 key={i.id} 
                 className={`flex-1 transition-all duration-500 rounded-sm ${i.completed ? 'opacity-100 scale-y-100' : 'opacity-10 scale-y-75'}`} 
-                style={{ backgroundColor: i.subjectColor || subjects.find(s => s.id === i.subjectId)?.color || '#cbd5e1' }} 
+                style={{ backgroundColor: subjects.find(s => s.id === i.subjectId)?.color || i.subjectColor || '#cbd5e1' }} 
               />
             ))}
           </div>
