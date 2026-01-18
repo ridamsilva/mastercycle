@@ -389,7 +389,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Horas Totais</label>
-                    <input name="totalHours" type="number" step="0.5" defaultValue={editingSubject?.totalHours || 2} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
+                    <input name="totalHours" type="number" step="0.5" defaultValue={editingSubject?.totalHours || 1} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Repetições</label>
