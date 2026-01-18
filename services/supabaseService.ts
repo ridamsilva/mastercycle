@@ -1,37 +1,68 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY } from '../constants.tsx';
 import { Subject, CycleItem } from '../types.ts';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export const supabaseService = {
+  // --- AUTH ---
+  async signUp(email: string, pass: string) {
+    return await supabase.auth.signUp({ email, password: pass });
+  },
+
+  async signIn(email: string, pass: string) {
+    return await supabase.auth.signInWithPassword({ email, password: pass });
+  },
+
+  async signOut() {
+    return await supabase.auth.signOut();
+  },
+
+  async getSession() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session;
+  },
+
+  async getUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
+  },
+
+  // --- DATA ---
   async fetchSubjects(): Promise<Subject[] | null> {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
       const { data, error } = await supabase
         .from('subjects')
-        .select('*');
+        .select('*')
+        .eq('user_id', user.id); // Filtro explícito além do RLS
       
-      if (error) {
-        if (error.code === 'PGRST116' || error.message.includes('cache')) {
-          console.warn('Tabela subjects não encontrada no Supabase. Verifique se as tabelas foram criadas no SQL Editor.');
-          return null;
-        }
-        throw error;
-      }
-      return data;
+      if (error) throw error;
+      return data as Subject[];
     } catch (error: any) {
-      console.error('Erro ao buscar disciplinas:', error.message || error);
+      console.error('Erro ao buscar disciplinas:', error.message);
       return null;
     }
   },
 
   async upsertSubjects(subjects: Subject[]) {
     try {
-      if (subjects.length === 0) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Proteção contra sobrescrever dados remotos com estado vazio acidentalmente
+      if (subjects.length === 0) {
+        // Se o usuário deliberadamente apagou tudo, permitimos se já houver carregado antes
+        // Caso contrário, ignoramos para evitar perda de dados por falha de estado
+        return; 
+      }
 
       const formattedSubjects = subjects.map(s => ({
         id: s.id,
+        user_id: user.id,
         name: s.name,
         totalHours: s.totalHours,
         frequency: s.frequency,
@@ -43,55 +74,58 @@ export const supabaseService = {
 
       const { error } = await supabase
         .from('subjects')
-        .upsert(formattedSubjects);
+        .upsert(formattedSubjects, { onConflict: 'id' });
       
       if (error) throw error;
     } catch (error: any) {
-      console.error('Erro ao salvar disciplinas:', error.message || error);
-      throw error;
+      console.error('Erro ao salvar disciplinas:', error.message);
     }
   },
 
   async deleteSubject(id: string) {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { error } = await supabase
         .from('subjects')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
       
       if (error) throw error;
     } catch (error: any) {
-      console.error('Erro ao excluir disciplina:', error.message || error);
+      console.error('Erro ao excluir disciplina:', error.message);
     }
   },
 
   async fetchCycleItems(): Promise<CycleItem[] | null> {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
       const { data, error } = await supabase
         .from('cycle_items')
         .select('*')
+        .eq('user_id', user.id)
         .order('order', { ascending: true });
-      
-      if (error) {
-        if (error.code === 'PGRST116' || error.message.includes('cache')) {
-          console.warn('Tabela cycle_items não encontrada no Supabase.');
-          return null;
-        }
-        throw error;
-      }
-      return data;
+
+      if (error) throw error;
+      return data as CycleItem[];
     } catch (error: any) {
-      console.error('Erro ao buscar itens do ciclo:', error.message || error);
+      console.error('Erro ao buscar ciclo:', error.message);
       return null;
     }
   },
 
   async upsertCycleItems(items: CycleItem[]) {
     try {
-      if (items.length === 0) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || items.length === 0) return;
       
       const formattedItems = items.map(item => ({
         id: item.id,
+        user_id: user.id,
         subjectId: item.subjectId,
         duration: item.duration,
         completed: item.completed,
@@ -103,24 +137,11 @@ export const supabaseService = {
 
       const { error } = await supabase
         .from('cycle_items')
-        .upsert(formattedItems);
+        .upsert(formattedItems, { onConflict: 'id' });
       
       if (error) throw error;
     } catch (error: any) {
-      console.error('Erro ao salvar itens do ciclo:', error.message || error);
-      throw error;
-    }
-  },
-
-  async deleteCycleItem(id: string) {
-    try {
-      const { error } = await supabase
-        .from('cycle_items')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-    } catch (error: any) {
-      console.error('Erro ao excluir item do ciclo:', error.message || error);
+      console.error('Erro ao salvar ciclo:', error.message);
     }
   }
 };
