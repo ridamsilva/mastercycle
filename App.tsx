@@ -9,12 +9,10 @@ import PerformanceRank from './components/PerformanceRank.tsx';
 import Auth from './components/Auth.tsx';
 import UserProfile from './components/UserProfile.tsx';
 import { supabaseService, supabase } from './services/supabaseService.ts';
-import { getStudyAdvice } from './services/geminiService.ts';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [hasApiKey, setHasApiKey] = useState(false);
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [cycleItems, setCycleItems] = useState<CycleItem[]>([]);
@@ -24,10 +22,9 @@ const App: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
-  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [modalColor, setModalColor] = useState<string>(COLORS[0]);
 
-  // 1. Verificação Rigorosa de Autenticação
+  // 1. Verificação de Autenticação
   useEffect(() => {
     let mounted = true;
 
@@ -63,20 +60,7 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // 2. Verificar Chave de API (Obrigatório para Gemini 3)
-  useEffect(() => {
-    const checkKey = async () => {
-      if (typeof window.aistudio !== 'undefined') {
-        const selected = await window.aistudio.hasSelectedApiKey();
-        setHasApiKey(selected);
-      } else {
-        setHasApiKey(true);
-      }
-    };
-    if (session) checkKey();
-  }, [session]);
-
-  // 3. Carregar Dados do Usuário
+  // 2. Carregar Dados do Usuário
   useEffect(() => {
     if (!session?.user) return;
     
@@ -91,7 +75,7 @@ const App: React.FC = () => {
 
         setSyncStatus('success');
       } catch (e) {
-        console.warn("Falha ao carregar dados remotos - operando localmente.");
+        console.warn("Falha ao carregar dados remotos.");
         setSyncStatus('error');
       } finally {
         setIsInitialLoadDone(true);
@@ -100,23 +84,7 @@ const App: React.FC = () => {
     loadData();
   }, [session]);
 
-  // 4. IA Mentor
-  useEffect(() => {
-    if (subjects.length > 0 && isInitialLoadDone && session && hasApiKey) {
-      const fetchAdvice = async () => {
-        try {
-          const advice = await getStudyAdvice(subjects);
-          setAiAdvice(advice);
-        } catch (e) {
-          console.error("AI Error:", e);
-        }
-      };
-      const timer = setTimeout(fetchAdvice, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [subjects.length, isInitialLoadDone, session, hasApiKey]);
-
-  // 5. Sincronização Automática com Supabase
+  // 3. Sincronização Automática com Supabase
   useEffect(() => {
     if (!isInitialLoadDone || !session?.user || subjects.length === 0) return;
 
@@ -204,9 +172,8 @@ const App: React.FC = () => {
   };
 
   const deleteSubject = async (id: string) => {
-    if (!confirm("Excluir disciplina? Isso removerá permanentemente todos os blocos do ciclo vinculados.")) return;
+    if (!confirm("Excluir disciplina? Isso removerá todos os blocos do ciclo.")) return;
     
-    // Atualização local imediata para fluidez
     const updatedSubjects = subjects.filter(s => s.id !== id);
     const updatedCycleItems = cycleItems.filter(item => item.subjectId !== id);
     setSubjects(updatedSubjects);
@@ -216,15 +183,7 @@ const App: React.FC = () => {
       await supabaseService.deleteSubject(id);
       setSyncStatus('success');
     } catch (error) {
-      console.error("Erro ao deletar disciplina:", error);
       setSyncStatus('error');
-    }
-  };
-
-  const handleOpenKeySelection = async () => {
-    if (typeof window.aistudio !== 'undefined') {
-      await window.aistudio.openSelectKey();
-      setHasApiKey(true);
     }
   };
 
@@ -243,34 +202,6 @@ const App: React.FC = () => {
     return <Auth onSuccess={(s) => setSession(s)} />;
   }
 
-  if (!hasApiKey) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
-        <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-[40px] p-10 shadow-2xl text-center space-y-8">
-          <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-3xl flex items-center justify-center mx-auto text-4xl shadow-inner">🔑</div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Ativar Mentor IA</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-              Você está logado! Agora, selecione sua chave de API para liberar as dicas de estudo estratégicas do Gemini.
-            </p>
-          </div>
-          <button 
-            onClick={handleOpenKeySelection}
-            className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl shadow-xl shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all active:scale-[0.98] tracking-widest uppercase text-xs"
-          >
-            SELECIONAR CHAVE API
-          </button>
-          <button 
-            onClick={() => setHasApiKey(true)}
-            className="text-[10px] font-black text-slate-400 hover:text-indigo-500 uppercase tracking-widest"
-          >
-            Continuar sem IA por enquanto
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen pb-12 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 font-inter">
       <header className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
@@ -285,7 +216,7 @@ const App: React.FC = () => {
               <h1 className="text-lg font-black tracking-tighter text-slate-900 dark:text-white leading-none">MasterCycle</h1>
               <div className="flex items-center gap-1.5 mt-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-                <span className="text-[8px] font-black uppercase text-slate-400">{syncStatus === 'syncing' ? 'Sincronizando' : syncStatus === 'error' ? 'Erro de Nuvem' : 'Sincronizado'}</span>
+                <span className="text-[8px] font-black uppercase text-slate-400">{syncStatus === 'syncing' ? 'Salvando' : syncStatus === 'error' ? 'Erro' : 'Salvo'}</span>
               </div>
             </div>
           </div>
@@ -308,15 +239,6 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
-          {aiAdvice && (
-            <div className="bg-indigo-600 p-6 rounded-[32px] text-white shadow-xl">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded">IA Mentor</span>
-              </div>
-              <p className="text-xs font-medium leading-relaxed opacity-90 italic">"{aiAdvice}"</p>
-            </div>
-          )}
-          
           <PomodoroTimer />
           <PerformanceRank subjects={subjects} />
           

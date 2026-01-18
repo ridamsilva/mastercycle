@@ -1,10 +1,19 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
+const ALARM_SOUNDS = {
+  beep: { name: 'Padrão (Beep)', url: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' },
+  digital: { name: 'Digital (Relógio)', url: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg' },
+  bell: { name: 'Sino (Clássico)', url: 'https://actions.google.com/sounds/v1/clocks/alarm_clock_ringing_short.ogg' },
+  zen: { name: 'Zen (Gongo)', url: 'https://actions.google.com/sounds/v1/clocks/bell_tower_chime.ogg' },
+  nature: { name: 'Natureza (Pássaros)', url: 'https://actions.google.com/sounds/v1/animals/bird_chirp_short.ogg' },
+};
+
 const PomodoroTimer: React.FC = () => {
   const [workTime, setWorkTime] = useState(60);
   const [shortBreak, setShortBreak] = useState(10);
   const [longBreak, setLongBreak] = useState(30);
+  const [selectedSound, setSelectedSound] = useState<keyof typeof ALARM_SOUNDS>('beep');
   
   const [mode, setMode] = useState<'work' | 'short' | 'long'>('work');
   const [timeLeft, setTimeLeft] = useState(workTime * 60);
@@ -20,7 +29,7 @@ const PomodoroTimer: React.FC = () => {
       }, 1000);
     } else if (timeLeft === 0) {
       setIsActive(false);
-      const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+      const audio = new Audio(ALARM_SOUNDS[selectedSound].url);
       audio.play().catch(() => {});
       if (timerRef.current) clearInterval(timerRef.current);
     } else {
@@ -29,7 +38,7 @@ const PomodoroTimer: React.FC = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isActive, timeLeft]);
+  }, [isActive, timeLeft, selectedSound]);
 
   const toggleTimer = () => setIsActive(!isActive);
 
@@ -82,33 +91,51 @@ const PomodoroTimer: React.FC = () => {
       </div>
 
       {isSettingsOpen && (
-        <div className="grid grid-cols-3 gap-2 mb-4 animate-in slide-in-from-top-2 fade-in duration-300 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-transparent dark:border-slate-800">
-          <div className="space-y-1">
-            <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Foco</label>
-            <input 
-              type="number" 
-              value={workTime} 
-              onChange={(e) => setWorkTime(Math.max(1, Number(e.target.value)))}
-              className="w-full p-1 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
-            />
+        <div className="space-y-4 mb-4 animate-in slide-in-from-top-2 fade-in duration-300 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Foco</label>
+              <input 
+                type="number" 
+                value={workTime} 
+                onChange={(e) => setWorkTime(Math.max(1, Number(e.target.value)))}
+                className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Curta</label>
+              <input 
+                type="number" 
+                value={shortBreak} 
+                onChange={(e) => setShortBreak(Math.max(1, Number(e.target.value)))}
+                className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Longa</label>
+              <input 
+                type="number" 
+                value={longBreak} 
+                onChange={(e) => setLongBreak(Math.max(1, Number(e.target.value)))}
+                className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
           </div>
           <div className="space-y-1">
-            <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Curta</label>
-            <input 
-              type="number" 
-              value={shortBreak} 
-              onChange={(e) => setShortBreak(Math.max(1, Number(e.target.value)))}
-              className="w-full p-1 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Longa</label>
-            <input 
-              type="number" 
-              value={longBreak} 
-              onChange={(e) => setLongBreak(Math.max(1, Number(e.target.value)))}
-              className="w-full p-1 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
-            />
+            <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tighter">Som de Alerta</label>
+            <select 
+              value={selectedSound} 
+              onChange={(e) => {
+                const sound = e.target.value as keyof typeof ALARM_SOUNDS;
+                setSelectedSound(sound);
+                new Audio(ALARM_SOUNDS[sound].url).play().catch(() => {});
+              }}
+              className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+            >
+              {Object.entries(ALARM_SOUNDS).map(([key, { name }]) => (
+                <option key={key} value={key}>{name}</option>
+              ))}
+            </select>
           </div>
         </div>
       )}

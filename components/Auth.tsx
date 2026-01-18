@@ -81,11 +81,11 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             
             <div className="flex gap-4">
               <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0">
-                <span className="text-lg">🤖</span>
+                <span className="text-lg">📊</span>
               </div>
               <div>
-                <h4 className="font-bold text-lg">Mentor IA</h4>
-                <p className="text-indigo-100 text-sm opacity-80">Receba dicas estratégicas baseadas no seu desempenho real.</p>
+                <h4 className="font-bold text-lg">Análise de Domínio</h4>
+                <p className="text-indigo-100 text-sm opacity-80">Monitore sua evolução e foque onde você tem mais dificuldade.</p>
               </div>
             </div>
             
