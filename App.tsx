@@ -121,7 +121,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Pega a última performance de cada matéria no ciclo anterior para repetir nas novas ocorrências
     const lastPerformanceMap: Record<string, number | undefined> = {};
     prevItems.forEach(item => {
       if (item.performance !== undefined) {
@@ -129,7 +128,6 @@ const App: React.FC = () => {
       }
     });
 
-    // Mapeamento por ocorrência para preservação de progresso (se não for reset)
     const prevItemsMap: Record<string, CycleItem[]> = {};
     prevItems.forEach(item => {
       if (!prevItemsMap[item.subjectId]) prevItemsMap[item.subjectId] = [];
@@ -161,7 +159,6 @@ const App: React.FC = () => {
         const existing = prevItemsMap[sId]?.[count];
         const subConfig = currentSubjects.find(s => s.id === sId);
 
-        // Herda a nota: Prioridade -> Existente na mesma ocorrência > Última nota da matéria > Nota config global
         const inheritedPerformance = resetCompleted 
           ? lastPerformanceMap[sId] ?? subConfig?.masteryPercentage 
           : existing?.performance ?? lastPerformanceMap[sId] ?? subConfig?.masteryPercentage;
@@ -195,19 +192,9 @@ const App: React.FC = () => {
   const handleUpdatePerformance = (itemId: string, val: number) => {
     const item = cycleItems.find(i => i.id === itemId);
     if (!item) return;
-    
-    // Limite rígido de 100%
     const cappedValue = Math.min(100, Math.max(0, val));
-    
-    // REPETIR NOTA: Sincroniza todas as ocorrências da mesma disciplina no ciclo
-    setCycleItems(prev => prev.map(i => 
-      i.subjectId === item.subjectId ? { ...i, performance: cappedValue } : i
-    ));
-    
-    // Atualiza a nota global da matéria para herança futura
-    setSubjects(prev => prev.map(s => 
-      s.id === item.subjectId ? { ...s, masteryPercentage: cappedValue } : s
-    ));
+    setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, performance: cappedValue } : i));
+    setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, masteryPercentage: cappedValue } : s));
   };
 
   const handleMoveItem = (id: string, direction: 'up' | 'down') => {
@@ -222,7 +209,6 @@ const App: React.FC = () => {
       const [item] = list.splice(index, 1);
       list.splice(targetIndex, 0, item);
 
-      // Re-mapeia IDs determinísticos para evitar duplicatas no Supabase ao persistir a nova ordem
       return list.map((item, idx) => ({
         ...item,
         order: idx,
@@ -264,8 +250,6 @@ const App: React.FC = () => {
       updated = [...subjects, newSubject];
     }
     setSubjects(updated);
-    
-    // Preserva estado ao adicionar nova matéria
     generateCycle(updated, cycleItems);
     setIsModalOpen(false);
   };
@@ -333,32 +317,34 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all hover:bg-slate-200 dark:hover:bg-slate-700">
             {isDarkMode ? '☀️' : '🌙'}
           </button>
           <button onClick={() => setIsStatsOpen(true)} className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-[#0066b2] transition-all hover:scale-105">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" /></svg>
           </button>
-          <button onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} className="hidden sm:block px-6 py-3 bg-[#0066b2] text-white text-[10px] font-black rounded-2xl uppercase tracking-[0.2em] shadow-lg hover:bg-brand-darkBlue transition-all">
-            Nova Matéria
+          {/* Botão Nova Matéria no Header (Adaptativo) */}
+          <button 
+            onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} 
+            className="flex items-center justify-center sm:px-6 py-3 min-w-[48px] bg-[#0066b2] text-white rounded-2xl shadow-lg hover:bg-brand-darkBlue transition-all active:scale-95"
+          >
+            <span className="hidden sm:inline text-[10px] font-black uppercase tracking-[0.2em]">Nova Matéria</span>
+            <span className="sm:hidden text-2xl font-black">+</span>
           </button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-4 space-y-10">
-          <PomodoroTimer />
-          <PerformanceRank subjects={subjects} />
-          <div className="space-y-4">
-             <div className="flex items-center justify-between">
-                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Suas Disciplinas</h3>
-             </div>
-             {subjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={deleteSubject} onEdit={(sub) => { setEditingSubject(sub); setMasteryValue(sub.masteryPercentage); setIsModalOpen(true); }} />)}
-          </div>
-        </div>
+      {/* Botão Flutuante (FAB) Mobile */}
+      <button 
+        onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }}
+        className="sm:hidden fixed bottom-6 right-6 z-40 w-16 h-16 bg-brand-blue text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-black transition-transform active:scale-90 border-4 border-white dark:border-slate-900"
+      >
+        +
+      </button>
 
-        <div className="lg:col-span-8">
+      <main className="max-w-7xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-8 order-1 lg:order-2">
           <CycleList 
             items={cycleItems} 
             subjects={subjects} 
@@ -369,6 +355,20 @@ const App: React.FC = () => {
             onAppendCycle={() => generateCycle(subjects, cycleItems, true)}
             onUpdateSubjectTopics={(sid, topics) => setSubjects(prev => prev.map(s => s.id === sid ? { ...s, topics } : s))}
           />
+        </div>
+
+        <div className="lg:col-span-4 order-2 lg:order-1 space-y-10">
+          <PomodoroTimer />
+          <PerformanceRank subjects={subjects} />
+          <div className="space-y-4">
+             <div className="flex items-center justify-between">
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Suas Disciplinas</h3>
+                <button onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} className="sm:hidden px-4 py-2 bg-brand-blue/10 text-brand-blue text-[8px] font-black rounded-xl uppercase tracking-wider">
+                  + NOVA
+                </button>
+             </div>
+             {subjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={deleteSubject} onEdit={(sub) => { setEditingSubject(sub); setMasteryValue(sub.masteryPercentage); setIsModalOpen(true); }} />)}
+          </div>
         </div>
       </main>
 

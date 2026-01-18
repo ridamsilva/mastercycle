@@ -121,7 +121,7 @@ const CycleList: React.FC<CycleListProps> = ({
                 <div 
                   className={`grid grid-cols-[30px_45px_1fr_60px_60px_35px] sm:grid-cols-[40px_100px_1fr_100px_100px_40px] items-center gap-1 sm:gap-2 px-2 sm:px-6 py-3 sm:py-5 cursor-default hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${isExpanded ? 'bg-blue-50/20 dark:bg-blue-900/10 border-l-4 border-l-brand-blue' : ''}`}
                 >
-                  {/* Botões de Reordenar - Sempre visíveis em mobile para facilitar toque */}
+                  {/* Botões de Reordenar */}
                   <div className="flex flex-col gap-1 opacity-60 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
                     <button 
                       disabled={idx === 0} 
@@ -247,51 +247,98 @@ const CycleList: React.FC<CycleListProps> = ({
                 </div>
 
                 {isExpanded && (
-                  <div className="px-4 sm:px-8 pb-6 bg-slate-50/50 dark:bg-slate-950/20 border-t border-slate-100 dark:border-slate-800">
-                    <div className="pt-6 space-y-6">
-                      <div className="space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <h5 className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Tópicos da Sessão</h5>
-                          <div className="flex gap-2">
-                            <input value={newTopicName} onChange={e => setNewTopicName(e.target.value)} placeholder="Novo..." className="text-[10px] sm:text-xs p-2 sm:p-3 rounded-xl border-2 border-slate-100 dark:bg-slate-950 dark:border-slate-800 focus:border-brand-blue outline-none font-bold flex-1" />
-                            <button onClick={() => { 
-                              if (!newTopicName) return;
-                              onUpdateSubjectTopics(sub.id, [...(sub.topics || []), { id: Date.now().toString(), name: newTopicName, completed: false, duration: 1 }]);
-                              setNewTopicName("");
-                            }} className="bg-brand-blue text-white px-3 sm:px-5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase hover:bg-brand-darkBlue transition-colors shrink-0">ADD</button>
-                          </div>
+                  <div className="px-0 pb-6 bg-slate-50/50 dark:bg-slate-950/20 border-t border-slate-100 dark:border-slate-800">
+                    <div className="pt-4 space-y-4">
+                      <div className="px-4 sm:px-8 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+                        <h5 className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Assuntos da Sessão</h5>
+                        <div className="flex gap-2">
+                          <input value={newTopicName} onChange={e => setNewTopicName(e.target.value)} placeholder="Novo assunto..." className="text-[10px] sm:text-xs p-2 sm:p-3 rounded-xl border-2 border-slate-100 dark:bg-slate-950 dark:border-slate-800 focus:border-brand-blue outline-none font-bold flex-1" />
+                          <button onClick={() => { 
+                            if (!newTopicName) return;
+                            onUpdateSubjectTopics(sub.id, [...(sub.topics || []), { id: Date.now().toString(), name: newTopicName, completed: false, duration: 1, performance: 0 }]);
+                            setNewTopicName("");
+                          }} className="bg-brand-blue text-white px-3 sm:px-5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase hover:bg-brand-darkBlue transition-colors shrink-0">ADD</button>
                         </div>
+                      </div>
 
-                        <div className="grid grid-cols-1 gap-2 sm:gap-3">
-                          {(sub.topics || []).map(t => (
-                            <div key={t.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm transition-all hover:border-blue-100 group">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <input type="checkbox" checked={t.completed} onChange={e => {
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {(sub.topics || []).map(t => (
+                          <div 
+                            key={t.id} 
+                            className={`grid grid-cols-[30px_45px_1fr_60px_60px_35px] sm:grid-cols-[40px_100px_1fr_100px_100px_40px] items-center gap-1 sm:gap-2 px-2 sm:px-6 py-2 transition-all hover:bg-white dark:hover:bg-slate-800 group/topic`}
+                          >
+                            {/* Coluna 1: Delete */}
+                            <div className="flex justify-center opacity-0 group-hover/topic:opacity-100 transition-opacity">
+                              <button 
+                                onClick={() => onUpdateSubjectTopics(sub.id, sub.topics.filter(topic => topic.id !== t.id))}
+                                className="p-1 text-slate-300 hover:text-rose-500 transition-colors"
+                              >
+                                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </div>
+
+                            {/* Coluna 2: Checkbox */}
+                            <div className="flex justify-center">
+                              <input 
+                                type="checkbox" 
+                                checked={t.completed} 
+                                onChange={e => {
                                   onUpdateSubjectTopics(sub.id, sub.topics.map(topic => topic.id === t.id ? { ...topic, completed: e.target.checked } : topic));
-                                }} className="w-5 h-5 rounded-lg text-brand-blue focus:ring-brand-blue border-slate-200 dark:border-slate-800 cursor-pointer shrink-0" />
-                                <span className={`text-[10px] sm:text-xs font-black uppercase truncate ${t.completed ? 'text-slate-300 line-through' : 'text-slate-700 dark:text-slate-300'}`}>{t.name}</span>
-                              </div>
+                                }} 
+                                className="w-4 h-4 sm:w-5 sm:h-5 rounded text-brand-blue focus:ring-brand-blue border-slate-200 dark:border-slate-700 cursor-pointer" 
+                              />
+                            </div>
 
-                              <div className="flex items-center gap-2 justify-end">
-                                <div className="relative">
-                                  <input 
-                                    type="text" value={t.materialUrl || ""} placeholder="Link..." 
-                                    onChange={e => onUpdateSubjectTopics(sub.id, sub.topics.map(topic => topic.id === t.id ? { ...topic, materialUrl: e.target.value } : topic))}
-                                    className="w-28 sm:w-40 h-8 sm:h-9 px-2 sm:px-3 pr-7 sm:pr-8 text-[8px] sm:text-[10px] font-bold rounded-xl border border-slate-100 dark:border-slate-800 dark:bg-slate-950 focus:border-brand-blue outline-none transition-all"
-                                  />
-                                  {t.materialUrl && (
-                                    <a href={t.materialUrl.startsWith('http') ? t.materialUrl : `https://${t.materialUrl}`} target="_blank" rel="noopener noreferrer" className="absolute right-1.5 top-1.5 sm:right-2 sm:top-2 text-brand-blue hover:text-brand-darkBlue">
-                                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                                    </a>
-                                  )}
-                                </div>
-                                <button onClick={() => onUpdateSubjectTopics(sub.id, sub.topics.filter(topic => topic.id !== t.id))} className="p-1.5 text-slate-200 hover:text-rose-500 transition-colors">
-                                   <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
+                            {/* Coluna 3: Nome */}
+                            <div className="min-w-0">
+                              <span className={`text-[9px] sm:text-[11px] font-black uppercase truncate block ${t.completed ? 'text-slate-300 line-through' : 'text-slate-600 dark:text-slate-300'}`}>
+                                {t.name}
+                              </span>
+                            </div>
+
+                            {/* Coluna 4: Link */}
+                            <div className="flex justify-center relative group/url">
+                              <input 
+                                type="text" 
+                                value={t.materialUrl || ""} 
+                                placeholder="Link" 
+                                onChange={e => onUpdateSubjectTopics(sub.id, sub.topics.map(topic => topic.id === t.id ? { ...topic, materialUrl: e.target.value } : topic))}
+                                className="w-full bg-slate-100/50 dark:bg-slate-900/50 text-[8px] sm:text-[10px] font-bold p-1 rounded border-none outline-none focus:bg-white dark:focus:bg-slate-800 transition-colors truncate"
+                              />
+                              {t.materialUrl && (
+                                <a 
+                                  href={t.materialUrl.startsWith('http') ? t.materialUrl : `https://${t.materialUrl}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="absolute -top-1 -right-1 bg-white dark:bg-slate-900 rounded-full shadow-sm p-0.5 text-brand-blue opacity-0 group-hover/url:opacity-100 transition-opacity"
+                                >
+                                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                </a>
+                              )}
+                            </div>
+
+                            {/* Coluna 5: Nota */}
+                            <div className="flex justify-center">
+                              <div className={`flex items-center justify-center w-full h-6 sm:h-7 rounded-md transition-all ${getPerformanceStyles(t.performance)}`}>
+                                <input 
+                                  type="number" 
+                                  min="0"
+                                  max="100"
+                                  value={t.performance ?? ""} 
+                                  onChange={e => {
+                                    const val = Number(e.target.value);
+                                    onUpdateSubjectTopics(sub.id, sub.topics.map(topic => topic.id === t.id ? { ...topic, performance: val } : topic));
+                                  }}
+                                  className="w-full bg-transparent text-center text-[8px] sm:text-[10px] font-black outline-none border-none p-0" 
+                                  placeholder="--"
+                                />
                               </div>
                             </div>
-                          ))}
-                        </div>
+
+                            {/* Coluna 6: Espaço vazio (alinhamento) */}
+                            <div />
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
