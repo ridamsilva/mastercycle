@@ -17,7 +17,6 @@ const CycleRow = React.memo(({
   item, idx, sub, isExpanded, isEditingUrl, totalCount,
   onToggle, onExpand, onEditUrl, onUpdatePerf, onMove, onUpdateUrl 
 }: any) => {
-  // Se a disciplina foi excluída, usamos os metadados salvos no item
   const displayName = item.subjectName || sub?.name || 'Disciplina Excluída';
   const displayColor = item.subjectColor || sub?.color || '#cbd5e1';
 
@@ -107,8 +106,9 @@ const CycleList: React.FC<CycleListProps> = ({
   const [showHistory, setShowHistory] = useState(true);
 
   const activeItems = useMemo(() => items.filter(i => !i.completed).sort((a, b) => a.order - b.order), [items]);
-  const completedItems = useMemo(() => items.filter(i => i.completed).sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)), [items]);
+  const completedItemsForCurrentCycle = useMemo(() => items.filter(i => i.completed).sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)), [items]);
 
+  // Se não houver pendências e houver matérias, pode renovar.
   const canRenovate = activeItems.length === 0 && subjects.length > 0;
   const isFirstCycle = items.length === 0;
 
@@ -120,7 +120,6 @@ const CycleList: React.FC<CycleListProps> = ({
             <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase flex items-center gap-2">
               <span className="w-1.5 h-5 bg-brand-blue rounded-full"></span> CICLO ATUAL
             </h2>
-            {/* Contador focado apenas nas pendentes */}
             <p className="text-[10px] font-black text-brand-blue uppercase mt-1">Pendentes: {activeItems.length} de {items.length}</p>
           </div>
           {canRenovate && (
@@ -128,7 +127,7 @@ const CycleList: React.FC<CycleListProps> = ({
               onClick={onAppendCycle} 
               className="px-6 py-3 bg-brand-orange text-white rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-orange-100 hover:scale-105 active:scale-95 transition-all animate-in zoom-in duration-300"
             >
-              {isFirstCycle ? 'Iniciar Ciclo' : 'Renovar Ciclo'}
+              {isFirstCycle ? 'Iniciar Primeiro Ciclo' : 'Adicionar Novo Ciclo'}
             </button>
           )}
         </div>
@@ -148,7 +147,7 @@ const CycleList: React.FC<CycleListProps> = ({
         {activeItems.length > 0 ? (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] overflow-hidden shadow-sm">
             <div className="px-6 py-4 bg-blue-50/30 dark:bg-blue-900/10 border-b border-slate-100 dark:border-slate-800">
-               <h3 className="text-[10px] font-black text-brand-blue uppercase tracking-widest">Sessões Pendentes</h3>
+               <h3 className="text-[10px] font-black text-brand-blue uppercase tracking-widest">Aguardando Conclusão</h3>
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {activeItems.map((item, idx) => (
@@ -169,30 +168,30 @@ const CycleList: React.FC<CycleListProps> = ({
           </div>
         ) : subjects.length > 0 && items.length === 0 ? (
            <div className="py-20 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] text-center">
-            <p className="text-sm font-black uppercase tracking-widest opacity-30">Clique em 'Iniciar Ciclo' para começar</p>
+            <p className="text-sm font-black uppercase tracking-widest opacity-30">Clique em 'Adicionar Ciclo' para começar seu plano</p>
           </div>
         ) : subjects.length === 0 ? (
           <div className="py-20 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] text-center">
-            <p className="text-sm font-black uppercase tracking-widest opacity-30">Adicione disciplinas para gerar seu ciclo</p>
+            <p className="text-sm font-black uppercase tracking-widest opacity-30">Cadastre disciplinas ao lado para habilitar o ciclo</p>
           </div>
         ) : null}
 
-        {completedItems.length > 0 && (
+        {completedItemsForCurrentCycle.length > 0 && (
           <div className="space-y-4">
             <button 
               onClick={() => setShowHistory(!showHistory)}
               className="w-full py-4 flex items-center justify-between px-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-200 transition-colors"
             >
-              <span>Histórico do Ciclo ({completedItems.length})</span>
+              <span>Concluídos neste Bloco ({completedItemsForCurrentCycle.length})</span>
               <span>{showHistory ? 'Ocultar' : 'Mostrar'}</span>
             </button>
             
             {showHistory && (
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] overflow-hidden shadow-sm opacity-90 scale-[0.98]">
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {completedItems.map((item, idx) => (
+                  {completedItemsForCurrentCycle.map((item, idx) => (
                     <CycleRow 
-                      key={item.id} item={item} idx={idx} totalCount={completedItems.length}
+                      key={item.id} item={item} idx={idx} totalCount={completedItemsForCurrentCycle.length}
                       sub={subjects.find(s => s.id === item.subjectId)}
                       isExpanded={expandedItemId === item.id}
                       isEditingUrl={editingUrlId === item.id}

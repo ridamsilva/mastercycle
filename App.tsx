@@ -90,19 +90,9 @@ const App: React.FC = () => {
     localStorage.setItem('m_dark', String(isDarkMode));
   }, [isDarkMode]);
 
-  const generateCycle = useCallback((currentSubjects: Subject[]) => {
-    if (!currentSubjects.length) return;
-    
-    const lastDataMap = new Map();
-    cycleItems.forEach(item => {
-      lastDataMap.set(item.subjectId, {
-        performance: item.performance,
-        sessionUrl: item.sessionUrl
-      });
-    });
-
+  // Função para gerar as sessões de um ciclo
+  const createNewSessions = useCallback((currentSubjects: Subject[], lastOrder: number) => {
     const newCycleId = `cycle-${Date.now()}`;
-    const newItems: CycleItem[] = [];
     const pool = currentSubjects.flatMap(s => {
       const dur = Number((s.totalHours / s.frequency).toFixed(2));
       return Array.from({ length: s.frequency }, () => ({ 
@@ -115,27 +105,23 @@ const App: React.FC = () => {
     
     const shuffled = pool.sort(() => Math.random() - 0.5);
     
-    shuffled.forEach((p, i) => {
-      const historyData = lastDataMap.get(p.sid);
-      newItems.push({ 
-        id: generateId('item'), 
-        subjectId: p.sid, 
-        subjectName: p.sname,
-        subjectColor: p.scolor,
-        cycleId: newCycleId,
-        duration: p.dur, 
-        completed: false, 
-        order: i,
-        performance: historyData?.performance,
-        sessionUrl: historyData?.sessionUrl
-      });
-    });
+    return shuffled.map((p, i) => ({ 
+      id: generateId('item'), 
+      subjectId: p.sid, 
+      subjectName: p.sname,
+      subjectColor: p.scolor,
+      cycleId: newCycleId,
+      duration: p.dur, 
+      completed: false, 
+      order: lastOrder + 1 + i,
+      sessionUrl: ""
+    }));
+  }, []);
 
-    setCycleItems(newItems);
-  }, [cycleItems]);
-
-  const handleRenovateCycle = useCallback(async () => {
+  const handleAddNewCycle = useCallback(async () => {
     const done = cycleItems.filter(i => i.completed);
+    
+    // 1. Salva o snapshot no histórico permanente para segurança dos dados
     if (done.length > 0) {
       const avg = Math.round(done.reduce((a, i) => a + (i.performance || 0), 0) / done.length);
       const entry: CycleHistoryEntry = { 
@@ -144,7 +130,6 @@ const App: React.FC = () => {
         totalItems: done.length, 
         avgPerformance: avg, 
         totalHours: done.reduce((a, i) => a + i.duration, 0), 
-        // Snapshot com metadados para persistência
         cycleSnapshot: done.map(d => ({
           ...d,
           subjectName: d.subjectName || subjects.find(s => s.id === d.subjectId)?.name,
@@ -155,9 +140,12 @@ const App: React.FC = () => {
       if (session) supabaseService.saveHistoryEntry(entry);
     }
 
-    // LIMPAR O CICLO ATUAL E GERAR UM NOVO APENAS COM AS MATÉRIAS ATIVAS
-    generateCycle(subjects);
-  }, [cycleItems, subjects, session, generateCycle]);
+    // 2. Anexa novas sessões ao ciclo atual SEM remover as concluídas
+    const maxOrder = cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) : 0;
+    const newSessions = createNewSessions(subjects, maxOrder);
+    
+    setCycleItems(prev => [...prev, ...newSessions]);
+  }, [cycleItems, subjects, session, createNewSessions]);
 
   const handleMoveItem = useCallback((id: string, direction: 'up' | 'down') => {
     setCycleItems(prev => {
@@ -211,7 +199,7 @@ const App: React.FC = () => {
       };
       setSubjects(p => [...p, newSub]);
       
-      // INJETAR IMEDIATAMENTE NO CICLO TRABALHANDO COM OS PENDENTES
+      // Adiciona as sessões da nova matéria ao ciclo atual imediatamente
       const dur = Number((hours / freq).toFixed(2));
       const startOrder = cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) + 1 : 0;
       const newSessions: CycleItem[] = Array.from({ length: freq }, (_, i) => ({
@@ -222,7 +210,8 @@ const App: React.FC = () => {
         cycleId: `cycle-${Date.now()}`,
         duration: dur,
         completed: false,
-        order: startOrder + i
+        order: startOrder + i,
+        sessionUrl: ""
       }));
       setCycleItems(prev => [...prev, ...newSessions]);
     }
@@ -230,9 +219,9 @@ const App: React.FC = () => {
   }, [editingSubject, subjects, cycleItems]);
 
   const handleDeleteSubject = useCallback(async (id: string) => {
-    if (!confirm("Isso removerá a disciplina do seu ciclo atual, mas não afetará o histórico já salvo. Continuar?")) return;
+    if (!confirm("Isso removerá a disciplina das sessões PENDENTES. As sessões concluídas continuarão no histórico. Continuar?")) return;
     setSubjects(p => p.filter(s => s.id !== id));
-    setCycleItems(p => p.filter(i => i.subjectId !== id));
+    setCycleItems(p => p.filter(i => i.subjectId !== id || i.completed));
     if (session) supabaseService.deleteSubject(id);
   }, [session]);
 
@@ -262,7 +251,7 @@ const App: React.FC = () => {
             onUpdatePerformance={(id, v) => setCycleItems(p => p.map(i => i.id === id ? { ...i, performance: v } : i))}
             onUpdateUrl={handleUpdateUrl}
             onMoveItem={handleMoveItem} 
-            onAppendCycle={handleRenovateCycle} 
+            onAppendCycle={handleAddNewCycle} 
             onUpdateSubjectTopics={(sid, t) => setSubjects(p => p.map(s => s.id === sid ? { ...s, topics: t } : s))}
           />
         </div>
