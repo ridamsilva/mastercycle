@@ -40,6 +40,16 @@
       
       .custom-scrollbar::-webkit-scrollbar { width: 4px; }
       
+      /* Remove setas de input number */
+      input::-webkit-outer-spin-button,
+      input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type=number] {
+        -moz-appearance: textfield;
+      }
+
       #root:empty::before {
         content: 'Carregando MasterCycle...';
         position: absolute;

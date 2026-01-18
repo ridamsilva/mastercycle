@@ -36,17 +36,9 @@ export const supabaseService = {
     });
   },
 
-  /**
-   * No Supabase, a exclusão de usuário via Client SDK é restrita.
-   * Este método limpa as preferências e desloga o usuário. 
-   * Em produção, isso dispararia uma Edge Function ou RPC.
-   */
   async deleteAccount() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    // Limpa dados das tabelas associadas via RLS/Triggers se configurado,
-    // ou simplesmente desloga o usuário após marcar um flag de 'deleted'.
     await this.signOut();
   },
 
@@ -60,10 +52,7 @@ export const supabaseService = {
         .select('*')
         .eq('user_id', session.user.id);
       
-      if (error) {
-        if (error.code === '42501') console.error("Erro de Segurança: RLS bloqueou o acesso.");
-        throw error;
-      }
+      if (error) throw error;
       
       return (data || []).map(s => ({
         id: s.id,
@@ -84,7 +73,7 @@ export const supabaseService = {
   async upsertSubjects(subjects: Subject[]) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user || subjects.length === 0) return;
+      if (!session?.user) return;
 
       const payload = subjects.map(s => ({
         id: s.id,
@@ -138,7 +127,7 @@ export const supabaseService = {
   async upsertCycleItems(items: CycleItem[]) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user || items.length === 0) return;
+      if (!session?.user) return;
 
       const payload = items.map(item => ({
         id: item.id,
@@ -148,9 +137,7 @@ export const supabaseService = {
         completed: item.completed,
         order: item.order,
         performance: item.performance || null,
-        // Fix: session_url property correctly mapped from sessionUrl property of CycleItem type
         session_url: item.sessionUrl || null,
-        // Fix: completed_at property correctly mapped from completedAt property of CycleItem type
         completed_at: item.completedAt || null
       }));
 
@@ -165,6 +152,31 @@ export const supabaseService = {
   async deleteSubject(id: string) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
-    return await supabase.from('subjects').delete().match({ id, user_id: session.user.id });
+    
+    // Deleta os itens do ciclo vinculados primeiro para evitar conflitos de Foreign Key
+    const { error: cycleError } = await supabase
+      .from('cycle_items')
+      .delete()
+      .eq('subject_id', id)
+      .eq('user_id', session.user.id);
+    
+    if (cycleError) {
+      console.error("Erro ao deletar itens do ciclo:", cycleError);
+      throw cycleError;
+    }
+    
+    // Agora deleta a disciplina principal
+    const { error: subjectError } = await supabase
+      .from('subjects')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', session.user.id);
+
+    if (subjectError) {
+      console.error("Erro ao deletar disciplina:", subjectError);
+      throw subjectError;
+    }
+
+    return true;
   }
 };

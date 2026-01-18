@@ -22,21 +22,26 @@ const CycleList: React.FC<CycleListProps> = ({
 
   const getSubject = (id: string) => subjects.find(s => s.id === id);
   
-  // Mantém a ordem fixa conforme o planejamento original
   const sortedItems = [...items].sort((a, b) => a.order - b.order);
+
+  const formatShortUrl = (url: string) => {
+    if (!url) return "";
+    try {
+      const cleanUrl = url.replace('https://', '').replace('http://', '').replace('www.', '');
+      const parts = cleanUrl.split('/');
+      const domain = parts[0];
+      if (domain.length > 15) return domain.substring(0, 12) + '...';
+      return domain;
+    } catch {
+      return 'Abrir Link';
+    }
+  };
 
   const getPerformanceStyles = (val: number | undefined) => {
     if (val === undefined || val === null || isNaN(val)) return 'bg-slate-100 dark:bg-slate-800 text-slate-400';
     if (val < 70) return 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'; 
     if (val < 80) return 'bg-orange-100 text-brand-orange dark:bg-orange-900/40 dark:text-orange-300'; 
     return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'; 
-  };
-
-  const getPercentageColor = (val: number | undefined) => {
-    if (val === undefined || val === null || isNaN(val)) return 'text-slate-400';
-    if (val < 70) return 'text-rose-600 dark:text-rose-400';
-    if (val < 80) return 'text-brand-orange dark:text-orange-400';
-    return 'text-emerald-600 dark:text-emerald-400';
   };
 
   const formatDate = (timestamp?: number) => {
@@ -86,9 +91,9 @@ const CycleList: React.FC<CycleListProps> = ({
       </div>
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
-        <div className="grid grid-cols-[100px_1fr_80px_120px_40px] items-center gap-4 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="text-center flex flex-col items-center">
-            <span className="text-[10px] font-black text-slate-900 dark:text-slate-100 uppercase tracking-[0.2em] mb-1">Status</span>
+        <div className="grid grid-cols-[100px_1fr_120px_120px_40px] items-center gap-4 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+          <div className="text-center">
+            <span className="text-[10px] font-black text-slate-900 dark:text-slate-100 uppercase tracking-[0.2em]">Status</span>
           </div> 
           <div>
             <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Disciplina</span>
@@ -112,7 +117,7 @@ const CycleList: React.FC<CycleListProps> = ({
             return (
               <div key={item.id} className={`${item.completed ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''} transition-all duration-300`}>
                 <div 
-                  className={`grid grid-cols-[100px_1fr_80px_120px_40px] items-center gap-4 px-6 py-5 cursor-default hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${isExpanded ? 'bg-blue-50/20 dark:bg-blue-900/10 border-l-4 border-l-brand-blue' : ''}`}
+                  className={`grid grid-cols-[100px_1fr_120px_120px_40px] items-center gap-4 px-6 py-5 cursor-default hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${isExpanded ? 'bg-blue-50/20 dark:bg-blue-900/10 border-l-4 border-l-brand-blue' : ''}`}
                 >
                   <div className="flex justify-center">
                     <button 
@@ -134,46 +139,78 @@ const CycleList: React.FC<CycleListProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex justify-center relative">
-                    <button 
-                       onClick={() => setEditingUrlId(isEditingUrl ? null : item.id)}
-                       className={`p-2.5 rounded-xl border-2 transition-all ${item.sessionUrl ? 'bg-blue-50 border-brand-blue text-brand-blue' : 'border-slate-100 text-slate-300 dark:border-slate-800 hover:border-brand-blue hover:text-brand-blue'}`}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.826a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
-                    </button>
+                  <div className="flex flex-col justify-center items-center gap-0.5 relative">
+                    {item.sessionUrl ? (
+                      <>
+                        <a 
+                          href={item.sessionUrl.startsWith('http') ? item.sessionUrl : `https://${item.sessionUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[11px] font-black text-blue-600 dark:text-blue-400 hover:underline transition-all uppercase truncate max-w-[110px] text-center"
+                          title={item.sessionUrl}
+                        >
+                          {formatShortUrl(item.sessionUrl)}
+                        </a>
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setEditingUrlId(isEditingUrl ? null : item.id); 
+                          }}
+                          className="text-[8px] font-black text-slate-400 hover:text-blue-600 transition-colors uppercase tracking-[0.2em]"
+                        >
+                          EDITAR
+                        </button>
+                      </>
+                    ) : (
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setEditingUrlId(isEditingUrl ? null : item.id); 
+                        }}
+                        className="p-2 text-slate-300 hover:text-blue-600 transition-colors"
+                        title="Adicionar Link"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    )}
 
                     {isEditingUrl && (
-                      <div className="absolute top-full right-0 mt-3 z-50 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl w-72 animate-in fade-in zoom-in duration-200">
-                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-2">Link Sincronizado ({sub.name})</label>
-                        <div className="flex gap-2">
-                           <input 
-                              type="text" autoFocus value={item.sessionUrl || ""} 
-                              onChange={e => onUpdateUrl(item.id, e.target.value)}
-                              placeholder="https://..."
-                              className="flex-1 p-2.5 text-[10px] font-bold rounded-xl border-2 border-slate-100 dark:bg-slate-950 dark:border-slate-800 outline-none focus:border-brand-blue"
-                           />
-                           {item.sessionUrl && (
-                             <a href={item.sessionUrl.startsWith('http') ? item.sessionUrl : `https://${item.sessionUrl}`} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-brand-blue text-white rounded-xl">
-                               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                             </a>
-                           )}
-                        </div>
-                        <button onClick={() => setEditingUrlId(null)} className="w-full mt-3 py-2 text-[10px] font-black bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-lg uppercase hover:text-brand-blue transition-colors">Confirmar</button>
+                      <div 
+                        className="absolute top-full right-0 mt-3 z-50 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl w-72 animate-in fade-in zoom-in duration-200" 
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-2">Link do Material ({sub.name})</label>
+                        <input 
+                          type="text" autoFocus value={item.sessionUrl || ""} 
+                          onChange={e => onUpdateUrl(item.id, e.target.value)}
+                          placeholder="Cole a URL aqui..."
+                          className="w-full p-2.5 text-[10px] font-bold rounded-xl border-2 border-slate-100 dark:bg-slate-950 dark:border-slate-800 outline-none focus:border-brand-blue"
+                        />
+                        <button 
+                          onClick={() => setEditingUrlId(null)} 
+                          className="w-full mt-3 py-2 text-[10px] font-black bg-blue-600 text-white rounded-lg uppercase shadow-lg hover:bg-blue-700 transition-colors"
+                        >
+                          Salvar Link
+                        </button>
                       </div>
                     )}
                   </div>
 
+                  {/* CAMPO DE DESEMPENHO ATUALIZADO: % COLADO AO NÚMERO */}
                   <div className="flex justify-center">
-                    <div className="relative flex items-center w-full max-w-[90px]">
+                    <div className={`flex items-center justify-center w-full max-w-[85px] h-10 rounded-xl transition-all border-2 border-transparent focus-within:border-brand-blue ${getPerformanceStyles(item.performance)}`}>
                       <input 
-                        type="number" value={item.performance ?? ""} placeholder="--" 
+                        type="number" 
+                        value={item.performance ?? ""} 
+                        placeholder="--" 
                         onChange={e => onUpdatePerformance(item.id, Number(e.target.value))}
-                        className={`w-full h-11 text-center text-xs font-black rounded-xl border-2 border-transparent focus:border-brand-blue outline-none transition-all pr-4 ${getPerformanceStyles(item.performance)}`} 
+                        className="w-8 bg-transparent text-right text-xs font-black outline-none border-none p-0" 
                       />
-                      {item.performance !== undefined && item.performance !== null && !isNaN(item.performance) && (
-                        <span className={`absolute right-2 text-[10px] font-black ${getPercentageColor(item.performance)} pointer-events-none`}>
+                      {(item.performance !== undefined && item.performance !== null && !isNaN(item.performance)) && (
+                        <span className="text-[10px] font-black ml-0.5 opacity-80 pointer-events-none">
                           %
                         </span>
                       )}
@@ -222,16 +259,6 @@ const CycleList: React.FC<CycleListProps> = ({
                                     <a href={t.materialUrl.startsWith('http') ? t.materialUrl : `https://${t.materialUrl}`} target="_blank" rel="noopener noreferrer" className="absolute right-2 top-2 text-brand-blue hover:text-brand-darkBlue">
                                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                                     </a>
-                                  )}
-                                </div>
-                                <div className="relative flex items-center">
-                                  <input 
-                                    type="number" value={t.performance ?? ""} placeholder="%" 
-                                    onChange={e => onUpdateSubjectTopics(sub.id, sub.topics.map(topic => topic.id === t.id ? { ...topic, performance: Number(e.target.value) } : topic))}
-                                    className={`w-14 h-9 text-center text-[10px] font-black rounded-xl border-2 border-transparent transition-all pr-4 ${getPerformanceStyles(t.performance)}`}
-                                  />
-                                  {t.performance !== undefined && !isNaN(t.performance) && (
-                                    <span className={`absolute right-1.5 text-[9px] font-black ${getPercentageColor(t.performance)}`}>%</span>
                                   )}
                                 </div>
                                 <button onClick={() => onUpdateSubjectTopics(sub.id, sub.topics.filter(topic => topic.id !== t.id))} className="p-2 text-slate-200 hover:text-rose-500 transition-colors">

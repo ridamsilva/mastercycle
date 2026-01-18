@@ -35,6 +35,7 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error' | 'success'>('idle');
   
   const isInitialLoadRef = useRef(false);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     supabaseService.getSession().then(session => {
@@ -85,7 +86,9 @@ const App: React.FC = () => {
     localStorage.setItem(LOCAL_STORAGE_KEY_CYCLE, JSON.stringify(cycleItems));
 
     if (session && isInitialLoadRef.current) {
-      const timer = setTimeout(async () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      
+      syncTimerRef.current = setTimeout(async () => {
         setSyncStatus('syncing');
         try {
           await supabaseService.upsertSubjects(subjects);
@@ -95,7 +98,6 @@ const App: React.FC = () => {
           setSyncStatus('error');
         }
       }, 3000);
-      return () => clearTimeout(timer);
     }
   }, [subjects, cycleItems, session]);
 
@@ -200,18 +202,36 @@ const App: React.FC = () => {
   };
 
   const deleteSubject = async (id: string) => {
-    // Apenas UMA confirmação aqui
     const subjectToDelete = subjects.find(s => s.id === id);
     if (!subjectToDelete) return;
 
-    if (!confirm(`Deseja realmente excluir "${subjectToDelete.name.toUpperCase()}"? Esta ação removerá a disciplina de todos os ciclos não concluídos.`)) return;
+    if (!confirm(`Excluir "${subjectToDelete.name.toUpperCase()}" permanentemente do seu plano?`)) return;
     
-    setSubjects(prev => prev.filter(s => s.id !== id));
-    // Remove do ciclo apenas itens que NÃO foram concluídos
-    setCycleItems(prev => prev.filter(item => item.subjectId !== id || item.completed === true));
+    // 1. Limpa qualquer tentativa de sincronização pendente
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+
+    // 2. Remove do estado local IMEDIATAMENTE (UI atualiza na hora)
+    const nextSubjects = subjects.filter(s => s.id !== id);
+    const nextCycleItems = cycleItems.filter(item => item.subjectId !== id);
     
-    if (session) await supabaseService.deleteSubject(id);
+    setSubjects(nextSubjects);
+    setCycleItems(nextCycleItems);
+    
+    // 3. Remove do Banco de Dados explicitamente
+    if (session) {
+      setSyncStatus('syncing');
+      try {
+        await supabaseService.deleteSubject(id);
+        setSyncStatus('success');
+      } catch (err) {
+        console.error("Falha ao remover do banco de dados:", err);
+        setSyncStatus('error');
+        // Opcional: Recarregar dados se falhar para manter consistência
+      }
+    }
+    
     setIsModalOpen(false);
+    setEditingSubject(null);
   };
 
   if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-[#0066b2] font-black animate-pulse uppercase tracking-[0.5em]">Carregando MasterCycle...</div>;
