@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { supabaseService } from '../services/supabaseService.ts';
 
 interface AuthProps {
-  onSuccess: () => void;
+  onSuccess: (session: any) => void;
 }
 
 const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
@@ -29,8 +29,8 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
       if (!isLogin && data.user && !data.session) {
         setError('🎉 Conta criada com sucesso! Por favor, confirme seu e-mail para ativar seu acesso.');
         setIsLogin(true);
-      } else {
-        onSuccess();
+      } else if (data.session) {
+        onSuccess(data.session);
       }
     } catch (err: any) {
       console.error(err);
@@ -51,9 +51,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
   return (
     <div className="min-h-screen w-full flex bg-slate-50 dark:bg-slate-950 font-inter selection:bg-indigo-100 selection:text-indigo-900">
       
-      {/* Lado Esquerdo: Branding & Info (Escondido em Mobile) */}
       <div className="hidden lg:flex w-1/2 bg-indigo-600 relative overflow-hidden items-center justify-center p-12">
-        {/* Background Patterns */}
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-white blur-[120px]" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-400 blur-[120px]" />
@@ -101,14 +99,9 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
               </div>
             </div>
           </div>
-          
-          <div className="mt-12 pt-12 border-t border-white/10">
-            <p className="text-xs font-medium text-indigo-200 uppercase tracking-widest">MasterCycle Engine v2.5</p>
-          </div>
         </div>
       </div>
 
-      {/* Lado Direito: Formulário */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
         <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-700">
           
@@ -167,22 +160,6 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
                   placeholder="No mínimo 6 caracteres"
                   className="w-full pl-12 pr-12 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 dark:text-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 focus:outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-700 font-medium"
                 />
-                <button 
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-indigo-500 transition-colors"
-                >
-                  {showPassword ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  )}
-                </button>
               </div>
             </div>
 
@@ -199,26 +176,18 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-200 dark:shadow-none transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3 group"
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3 group"
             >
               {loading ? (
-                <>
-                  <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span className="tracking-widest uppercase text-xs">Aguarde...</span>
-                </>
+                <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <>
-                  <span className="tracking-widest uppercase text-xs">{isLogin ? 'Entrar no Sistema' : 'Começar Gratuitamente'}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </>
+                <span className="tracking-widest uppercase text-xs">{isLogin ? 'Entrar no Sistema' : 'Começar Gratuitamente'}</span>
               )}
             </button>
           </form>
 
           <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium text-center sm:text-left">
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
               {isLogin ? 'Ainda não tem acesso?' : 'Já possui uma conta?'}
             </p>
             <button 
@@ -228,13 +197,6 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
               {isLogin ? 'Cadastrar' : 'Fazer Login'}
             </button>
           </div>
-          
-          <div className="mt-12 text-center">
-            <p className="text-[10px] text-slate-300 dark:text-slate-700 font-black uppercase tracking-[0.2em]">
-              © 2024 MasterCycle • Privacidade & Termos
-            </p>
-          </div>
-
         </div>
       </div>
     </div>

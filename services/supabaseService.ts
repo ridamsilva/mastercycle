@@ -24,11 +24,6 @@ export const supabaseService = {
     return session;
   },
 
-  async getUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
-  },
-
   // --- DATA ---
   async fetchSubjects(): Promise<Subject[] | null> {
     try {
@@ -38,7 +33,7 @@ export const supabaseService = {
       const { data, error } = await supabase
         .from('subjects')
         .select('*')
-        .eq('user_id', user.id); // Filtro explícito além do RLS
+        .eq('user_id', user.id); 
       
       if (error) throw error;
       return data as Subject[];
@@ -51,14 +46,7 @@ export const supabaseService = {
   async upsertSubjects(subjects: Subject[]) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Proteção contra sobrescrever dados remotos com estado vazio acidentalmente
-      if (subjects.length === 0) {
-        // Se o usuário deliberadamente apagou tudo, permitimos se já houver carregado antes
-        // Caso contrário, ignoramos para evitar perda de dados por falha de estado
-        return; 
-      }
+      if (!user || subjects.length === 0) return;
 
       const formattedSubjects = subjects.map(s => ({
         id: s.id,
@@ -87,15 +75,17 @@ export const supabaseService = {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Graças ao ON DELETE CASCADE no SQL, deletar a matéria já limpa o ciclo
       const { error } = await supabase
         .from('subjects')
         .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .match({ id: id, user_id: user.id });
       
       if (error) throw error;
+      return true;
     } catch (error: any) {
-      console.error('Erro ao excluir disciplina:', error.message);
+      console.error('Erro ao excluir:', error.message);
+      throw error;
     }
   },
 

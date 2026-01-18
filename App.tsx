@@ -7,48 +7,78 @@ import CycleList from './components/CycleList.tsx';
 import PomodoroTimer from './components/PomodoroTimer.tsx';
 import PerformanceRank from './components/PerformanceRank.tsx';
 import Auth from './components/Auth.tsx';
+import UserProfile from './components/UserProfile.tsx';
 import { supabaseService, supabase } from './services/supabaseService.ts';
 import { getStudyAdvice } from './services/geminiService.ts';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [hasApiKey, setHasApiKey] = useState(false);
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [cycleItems, setCycleItems] = useState<CycleItem[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('mastercycle_darkmode') === 'true');
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error' | 'success'>('idle');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [modalColor, setModalColor] = useState<string>(COLORS[0]);
 
-  // Verificar Auth Inicial e Mudanças de Estado
+  // 1. Verificação Rigorosa de Autenticação
   useEffect(() => {
-    supabaseService.getSession().then(s => {
-      setSession(s);
-      setIsCheckingAuth(false);
-    });
+    let mounted = true;
+
+    const checkInitialSession = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (mounted) {
+          setSession(currentSession);
+          setIsCheckingAuth(false);
+        }
+      } catch (err) {
+        console.error("Erro auth:", err);
+        if (mounted) setIsCheckingAuth(false);
+      }
+    };
+
+    checkInitialSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      if (!newSession) {
-        setSubjects([]);
-        setCycleItems([]);
-        setIsInitialLoadDone(false);
+      if (mounted) {
+        setSession(newSession);
+        if (!newSession) {
+          setSubjects([]);
+          setCycleItems([]);
+          setIsInitialLoadDone(false);
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Carregar dados quando a sessão estiver ativa
+  // 2. Verificar Chave de API (Obrigatório para Gemini 3)
   useEffect(() => {
-    if (!session?.user) {
-      setIsInitialLoadDone(false);
-      return;
-    }
+    const checkKey = async () => {
+      if (typeof window.aistudio !== 'undefined') {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(selected);
+      } else {
+        setHasApiKey(true);
+      }
+    };
+    if (session) checkKey();
+  }, [session]);
+
+  // 3. Carregar Dados do Usuário
+  useEffect(() => {
+    if (!session?.user) return;
     
     const loadData = async () => {
       setSyncStatus('syncing');
@@ -56,11 +86,12 @@ const App: React.FC = () => {
         const remoteSubjects = await supabaseService.fetchSubjects();
         const remoteItems = await supabaseService.fetchCycleItems();
         
-        if (remoteSubjects) setSubjects(remoteSubjects);
-        if (remoteItems) setCycleItems(remoteItems);
+        if (remoteSubjects && remoteSubjects.length > 0) setSubjects(remoteSubjects);
+        if (remoteItems && remoteItems.length > 0) setCycleItems(remoteItems);
 
         setSyncStatus('success');
       } catch (e) {
+        console.warn("Falha ao carregar dados remotos - operando localmente.");
         setSyncStatus('error');
       } finally {
         setIsInitialLoadDone(true);
@@ -69,28 +100,25 @@ const App: React.FC = () => {
     loadData();
   }, [session]);
 
-  // IA - Mentor
+  // 4. IA Mentor
   useEffect(() => {
-    if (subjects.length > 0 && isInitialLoadDone) {
+    if (subjects.length > 0 && isInitialLoadDone && session && hasApiKey) {
       const fetchAdvice = async () => {
-        const advice = await getStudyAdvice(subjects);
-        setAiAdvice(advice);
+        try {
+          const advice = await getStudyAdvice(subjects);
+          setAiAdvice(advice);
+        } catch (e) {
+          console.error("AI Error:", e);
+        }
       };
-      const timer = setTimeout(fetchAdvice, 3000);
+      const timer = setTimeout(fetchAdvice, 5000);
       return () => clearTimeout(timer);
     }
-  }, [subjects.length, isInitialLoadDone]);
+  }, [subjects.length, isInitialLoadDone, session, hasApiKey]);
 
-  // Tema Dark/Light
+  // 5. Sincronização Automática com Supabase
   useEffect(() => {
-    if (isDarkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-    localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
-  }, [isDarkMode]);
-
-  // Sincronização automática
-  useEffect(() => {
-    if (!isInitialLoadDone || !session?.user) return;
+    if (!isInitialLoadDone || !session?.user || subjects.length === 0) return;
 
     const timer = setTimeout(async () => {
       setSyncStatus('syncing');
@@ -98,12 +126,21 @@ const App: React.FC = () => {
         await supabaseService.upsertSubjects(subjects);
         await supabaseService.upsertCycleItems(cycleItems);
         setSyncStatus('success');
-      } catch {
+      } catch (err) {
+        console.error("Erro sync:", err);
         setSyncStatus('error');
       }
-    }, 2000);
+    }, 3000);
+
     return () => clearTimeout(timer);
   }, [subjects, cycleItems, isInitialLoadDone, session]);
+
+  // Gerenciamento de Tema
+  useEffect(() => {
+    if (isDarkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+    localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
+  }, [isDarkMode]);
 
   const generateCycle = useCallback((currentSubjects: Subject[]) => {
     if (currentSubjects.length === 0) {
@@ -167,75 +204,103 @@ const App: React.FC = () => {
   };
 
   const deleteSubject = async (id: string) => {
-    if (!confirm("Excluir disciplina? Isso removerá todos os registros associados.")) return;
-    const updated = subjects.filter(s => s.id !== id);
-    setSubjects(updated);
-    setCycleItems(prev => prev.filter(item => item.subjectId !== id));
-    await supabaseService.deleteSubject(id);
+    if (!confirm("Excluir disciplina? Isso removerá permanentemente todos os blocos do ciclo vinculados.")) return;
+    
+    // Atualização local imediata para fluidez
+    const updatedSubjects = subjects.filter(s => s.id !== id);
+    const updatedCycleItems = cycleItems.filter(item => item.subjectId !== id);
+    setSubjects(updatedSubjects);
+    setCycleItems(updatedCycleItems);
+
+    try {
+      await supabaseService.deleteSubject(id);
+      setSyncStatus('success');
+    } catch (error) {
+      console.error("Erro ao deletar disciplina:", error);
+      setSyncStatus('error');
+    }
   };
 
-  const handleSignOut = async () => {
-    if (confirm("Deseja encerrar sua sessão?")) {
-      await supabaseService.signOut();
+  const handleOpenKeySelection = async () => {
+    if (typeof window.aistudio !== 'undefined') {
+      await window.aistudio.openSelectKey();
+      setHasApiKey(true);
     }
   };
 
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Iniciando MasterCycle...</p>
+        <div className="flex flex-col items-center gap-6 animate-pulse">
+          <div className="w-16 h-16 border-t-4 border-indigo-600 rounded-full animate-spin" />
+          <h2 className="text-sm font-black text-indigo-600 uppercase tracking-widest">MasterCycle</h2>
         </div>
       </div>
     );
   }
 
   if (!session) {
-    return <Auth onSuccess={() => {}} />;
+    return <Auth onSuccess={(s) => setSession(s)} />;
+  }
+
+  if (!hasApiKey) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
+        <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-[40px] p-10 shadow-2xl text-center space-y-8">
+          <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-3xl flex items-center justify-center mx-auto text-4xl shadow-inner">🔑</div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Ativar Mentor IA</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+              Você está logado! Agora, selecione sua chave de API para liberar as dicas de estudo estratégicas do Gemini.
+            </p>
+          </div>
+          <button 
+            onClick={handleOpenKeySelection}
+            className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl shadow-xl shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all active:scale-[0.98] tracking-widest uppercase text-xs"
+          >
+            SELECIONAR CHAVE API
+          </button>
+          <button 
+            onClick={() => setHasApiKey(true)}
+            className="text-[10px] font-black text-slate-400 hover:text-indigo-500 uppercase tracking-widest"
+          >
+            Continuar sem IA por enquanto
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen pb-12 bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 shadow-sm">
+    <div className="min-h-screen pb-12 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 font-inter">
+      <header className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-xl flex items-center justify-center text-white shadow-lg">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z" />
               </svg>
             </div>
-            <div className="hidden sm:flex flex-col">
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter">MasterCycle</h1>
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${
-                  syncStatus === 'syncing' ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/30' : 'bg-emerald-50 border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/30'
-                }`}>
-                  <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
-                  <span className="text-[9px] font-black uppercase tracking-tighter text-slate-500 dark:text-slate-400">{syncStatus === 'syncing' ? 'Salvando' : 'Nuvem OK'}</span>
-                </div>
+            <div className="flex flex-col">
+              <h1 className="text-lg font-black tracking-tighter text-slate-900 dark:text-white leading-none">MasterCycle</h1>
+              <div className="flex items-center gap-1.5 mt-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                <span className="text-[8px] font-black uppercase text-slate-400">{syncStatus === 'syncing' ? 'Sincronizando' : syncStatus === 'error' ? 'Erro de Nuvem' : 'Sincronizado'}</span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
-            <div className="hidden md:flex flex-col items-end mr-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sessão Ativa</span>
-              <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate max-w-[150px]">{session.user.email}</span>
-            </div>
-            
-            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:scale-105 transition-all text-lg">
+            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:scale-105 transition-all">
               {isDarkMode ? '☀️' : '🌙'}
             </button>
-            
-            <button onClick={handleSignOut} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:text-rose-600 transition-all text-slate-500" title="Sair">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+            <button onClick={() => setIsProfileOpen(true)} className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black text-xs">
+                {session?.user?.email?.charAt(0).toUpperCase()}
+              </div>
             </button>
-            
-            <button onClick={() => { setEditingSubject(null); setModalColor(COLORS[0]); setIsModalOpen(true); }} className="px-4 py-2 text-xs font-black text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md transition-all active:scale-95">
-              ADICIONAR +
+            <button onClick={() => { setEditingSubject(null); setModalColor(COLORS[0]); setIsModalOpen(true); }} className="px-5 py-2.5 bg-indigo-600 text-white text-[10px] font-black rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 dark:shadow-none transition-all active:scale-95 uppercase tracking-widest">
+              Adicionar
             </button>
           </div>
         </div>
@@ -244,12 +309,11 @@ const App: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
           {aiAdvice && (
-            <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-5 rounded-[24px] text-white shadow-xl animate-in slide-in-from-left-4 duration-500">
+            <div className="bg-indigo-600 p-6 rounded-[32px] text-white shadow-xl">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-5 h-5 bg-white/20 rounded-md flex items-center justify-center text-[10px] font-bold">AI</div>
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Mentor Estratégico</span>
+                <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded">IA Mentor</span>
               </div>
-              <p className="text-xs font-medium leading-relaxed italic opacity-95">{aiAdvice}</p>
+              <p className="text-xs font-medium leading-relaxed opacity-90 italic">"{aiAdvice}"</p>
             </div>
           )}
           
@@ -258,9 +322,9 @@ const App: React.FC = () => {
           
           <div className="space-y-4">
              {subjects.length === 0 ? (
-               <div className="text-center py-10 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400">
-                 <p className="text-xs font-bold uppercase tracking-widest mb-2 opacity-50">Sem disciplinas</p>
-                 <button onClick={() => setIsModalOpen(true)} className="text-[10px] font-black text-indigo-500 hover:underline">COMEÇAR AGORA</button>
+               <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-[32px] border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400">
+                 <p className="text-xs font-bold uppercase tracking-widest mb-4">Inicie seu Ciclo</p>
+                 <button onClick={() => setIsModalOpen(true)} className="px-6 py-2 bg-slate-100 dark:bg-slate-800 rounded-full text-[10px] font-black text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all">CRIAR DISCIPLINA</button>
                </div>
              ) : (
                subjects.map(subject => (
@@ -316,46 +380,60 @@ const App: React.FC = () => {
         </div>
       </main>
 
+      {isProfileOpen && (
+        <UserProfile 
+          user={session.user}
+          subjects={subjects}
+          cycleItems={cycleItems}
+          onClose={() => setIsProfileOpen(false)}
+          onLogout={async () => {
+            await supabase.auth.signOut();
+            setSession(null);
+            setIsProfileOpen(false);
+          }}
+        />
+      )}
+
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-lg p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800">
             <form onSubmit={handleAddOrEditSubject} className="space-y-6">
-              <h2 className="text-xl font-black">{editingSubject ? 'Editar Disciplina' : 'Criar Disciplina'}</h2>
+              <h2 className="text-xl font-black">{editingSubject ? 'Editar Disciplina' : 'Nova Disciplina'}</h2>
               <div className="space-y-4">
-                <input name="name" defaultValue={editingSubject?.name} required placeholder="Ex: Matemática Financeira" className="w-full p-4 rounded-xl border-2 border-slate-100 dark:border-slate-800 dark:bg-slate-800 focus:border-indigo-500 focus:outline-none" />
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Matéria</label>
+                  <input name="name" defaultValue={editingSubject?.name} required placeholder="Ex: Direito Constitucional" className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 dark:bg-slate-800 focus:border-indigo-500 focus:outline-none transition-all" />
+                </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Horas Totais</label>
-                    <input name="totalHours" type="number" step="0.5" defaultValue={editingSubject?.totalHours || 2} className="w-full p-4 rounded-xl border-2 border-slate-100 dark:border-slate-800 dark:bg-slate-800 focus:border-indigo-500" />
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Carga Total (h)</label>
+                    <input name="totalHours" type="number" step="0.5" defaultValue={editingSubject?.totalHours || 2} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 dark:bg-slate-800 focus:border-indigo-500 focus:outline-none" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Vezes no Ciclo</label>
-                    <input name="frequency" type="number" defaultValue={editingSubject?.frequency || 1} className="w-full p-4 rounded-xl border-2 border-slate-100 dark:border-slate-800 dark:bg-slate-800 focus:border-indigo-500" />
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Frequência</label>
+                    <input name="frequency" type="number" defaultValue={editingSubject?.frequency || 1} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 dark:bg-slate-800 focus:border-indigo-500 focus:outline-none" />
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2.5 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                <div className="flex flex-wrap gap-3 p-5 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800">
                   {COLORS.map(c => (
-                    <button key={c} type="button" onClick={() => setModalColor(c)} className={`w-8 h-8 rounded-full border-4 transition-transform ${modalColor === c ? 'border-white dark:border-slate-900 scale-125 ring-2 ring-indigo-500' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+                    <button key={c} type="button" onClick={() => setModalColor(c)} className={`w-8 h-8 rounded-full border-4 transition-all ${modalColor === c ? 'border-white dark:border-slate-900 scale-125 ring-2 ring-indigo-500' : 'border-transparent opacity-60'}`} style={{ backgroundColor: c }} />
                   ))}
-                  <input type="color" value={modalColor} onChange={e => setModalColor(e.target.value)} className="w-8 h-8 rounded-full cursor-pointer bg-transparent border-none p-0 overflow-hidden" />
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Domínio Atual</label>
-                    <span className="text-[10px] font-black text-indigo-600">{editingSubject?.masteryPercentage || 0}%</span>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Domínio Atual</label>
+                    <span className="text-xs font-black text-indigo-600">{editingSubject?.masteryPercentage || 0}%</span>
                   </div>
                   <input name="mastery" type="range" min="0" max="100" defaultValue={editingSubject?.masteryPercentage || 0} className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-indigo-600 bg-slate-200 dark:bg-slate-800" />
                 </div>
-
-                <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} placeholder="Link do Caderno (opcional)" className="w-full p-4 rounded-xl border-2 border-slate-100 dark:border-slate-800 dark:bg-slate-800 focus:border-indigo-500" />
               </div>
 
               <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-4 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold hover:bg-slate-200 transition-colors">Cancelar</button>
-                <button type="submit" className="flex-1 p-4 rounded-xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-colors">Salvar</button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 font-bold hover:bg-slate-200 transition-colors">Cancelar</button>
+                <button type="submit" className="flex-1 p-4 rounded-2xl bg-indigo-600 text-white font-bold shadow-xl shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-colors uppercase text-xs tracking-widest">Salvar</button>
               </div>
             </form>
           </div>
