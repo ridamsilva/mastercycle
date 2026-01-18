@@ -106,11 +106,15 @@ const CycleList: React.FC<CycleListProps> = ({
 
   // Filtra itens por status para melhor organização visual
   const activeItems = useMemo(() => items.filter(i => !i.completed).sort((a, b) => a.order - b.order), [items]);
+  
+  // Ordenar histórico: mais recentes (completedAt maior) ficam no topo do bloco de histórico
   const completedItems = useMemo(() => items.filter(i => i.completed).sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)), [items]);
+
+  const canRenovate = activeItems.length === 0 && items.length > 0;
 
   if (items.length === 0) return (
     <div className="py-20 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] text-center">
-      <p className="text-sm font-black uppercase tracking-widest opacity-30">Seu fluxo de estudos aparecerá aqui</p>
+      <p className="text-sm font-black uppercase tracking-widest opacity-30">Seu ciclo de estudos aparecerá aqui</p>
     </div>
   );
 
@@ -120,16 +124,18 @@ const CycleList: React.FC<CycleListProps> = ({
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase flex items-center gap-2">
-              <span className="w-1.5 h-5 bg-brand-blue rounded-full"></span> FLUXO ATUAL
+              <span className="w-1.5 h-5 bg-brand-blue rounded-full"></span> CICLO ATUAL
             </h2>
-            <p className="text-[10px] font-black text-brand-blue uppercase mt-1">Pendentes: {activeItems.length}</p>
+            <p className="text-[10px] font-black text-brand-blue uppercase mt-1">Sessões em aberto: {activeItems.length}</p>
           </div>
-          <button 
-            onClick={onAppendCycle} 
-            className="px-6 py-3 bg-brand-orange text-white rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-orange-100 hover:scale-105 active:scale-95 transition-all"
-          >
-            Renovar Ciclo
-          </button>
+          {canRenovate && (
+            <button 
+              onClick={onAppendCycle} 
+              className="px-6 py-3 bg-brand-orange text-white rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-orange-100 hover:scale-105 active:scale-95 transition-all animate-in zoom-in duration-300"
+            >
+              Renovar Ciclo
+            </button>
+          )}
         </div>
         <div className="flex gap-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
           {items.map(i => (
@@ -169,7 +175,7 @@ const CycleList: React.FC<CycleListProps> = ({
               onClick={() => setShowHistory(!showHistory)}
               className="w-full py-4 flex items-center justify-between px-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-200 transition-colors"
             >
-              <span>Sessões Concluídas ({completedItems.length})</span>
+              <span>Histórico do Ciclo ({completedItems.length})</span>
               <span>{showHistory ? 'Ocultar' : 'Mostrar'}</span>
             </button>
             

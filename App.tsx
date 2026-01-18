@@ -93,7 +93,6 @@ const App: React.FC = () => {
   const generateCycle = useCallback((currentSubjects: Subject[], append = false) => {
     if (!currentSubjects.length) return;
     
-    // Mapear o último estado de cada disciplina para herança
     const lastDataMap = new Map();
     cycleItems.forEach(item => {
       lastDataMap.set(item.subjectId, {
@@ -113,7 +112,7 @@ const App: React.FC = () => {
     const startOrder = append ? (cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) + 1 : 0) : 0;
     
     shuffled.forEach((p, i) => {
-      const history = lastDataMap.get(p.sid);
+      const historyData = lastDataMap.get(p.sid);
       newItems.push({ 
         id: generateId('item'), 
         subjectId: p.sid, 
@@ -121,8 +120,8 @@ const App: React.FC = () => {
         duration: p.dur, 
         completed: false, 
         order: startOrder + i,
-        performance: history?.performance, // Repete nota
-        sessionUrl: history?.sessionUrl    // Repete link
+        performance: historyData?.performance,
+        sessionUrl: historyData?.sessionUrl
       });
     });
 
@@ -136,7 +135,7 @@ const App: React.FC = () => {
   const handleRenovateCycle = useCallback(async () => {
     const activeItems = cycleItems.filter(i => !i.completed);
     if (activeItems.length > 0) {
-      if (!confirm("Você ainda possui sessões pendentes no fluxo atual. Deseja adicionar um novo ciclo mesmo assim?")) return;
+      if (!confirm("Você ainda possui sessões pendentes no ciclo atual. Deseja adicionar um novo ciclo mesmo assim?")) return;
     }
 
     const done = cycleItems.filter(i => i.completed);
@@ -166,8 +165,6 @@ const App: React.FC = () => {
       const newIdx = direction === 'up' ? idx - 1 : idx + 1;
       if (newIdx < 0 || newIdx >= items.length) return prev;
       
-      // Impedir mover itens concluídos para cima de itens pendentes ou vice-versa se desejar ordem lógica, 
-      // mas aqui permitimos organizar livremente dentro da lista
       const tempOrder = items[idx].order;
       items[idx].order = items[newIdx].order;
       items[newIdx].order = tempOrder;
@@ -180,8 +177,6 @@ const App: React.FC = () => {
     setCycleItems(prev => {
       const targetItem = prev.find(i => i.id === id);
       if (!targetItem) return prev;
-      
-      // Sincroniza em TODAS as sessões da mesma disciplina
       return prev.map(item => 
         item.subjectId === targetItem.subjectId 
           ? { ...item, sessionUrl: url } 
@@ -194,16 +189,40 @@ const App: React.FC = () => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const name = String(fd.get('name')).trim();
-    const updated = editingSubject 
-      ? subjects.map(s => s.id === editingSubject.id ? { ...s, name, totalHours: Number(fd.get('totalHours')), frequency: Number(fd.get('frequency')), notebookUrl: String(fd.get('notebookUrl')) } : s)
-      : [...subjects, { id: generateId('sub'), name, totalHours: Number(fd.get('totalHours')), frequency: Number(fd.get('frequency')), notebookUrl: String(fd.get('notebookUrl')), masteryPercentage: 0, color: COLORS[subjects.length % COLORS.length], topics: [] }];
-    setSubjects(updated);
-    
-    if (!editingSubject && cycleItems.length === 0) {
-      generateCycle(updated, false);
+    const freq = Number(fd.get('frequency'));
+    const hours = Number(fd.get('totalHours'));
+    const url = String(fd.get('notebookUrl'));
+
+    if (editingSubject) {
+      setSubjects(p => p.map(s => s.id === editingSubject.id ? { ...s, name, totalHours: hours, frequency: freq, notebookUrl: url } : s));
+    } else {
+      const newSub: Subject = { 
+        id: generateId('sub'), 
+        name, 
+        totalHours: hours, 
+        frequency: freq, 
+        notebookUrl: url, 
+        masteryPercentage: 0, 
+        color: COLORS[subjects.length % COLORS.length], 
+        topics: [] 
+      };
+      setSubjects(p => [...p, newSub]);
+      
+      // ADICIONAR AO CICLO ATUAL IMEDIATAMENTE
+      const dur = Number((hours / freq).toFixed(2));
+      const startOrder = cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) + 1 : 0;
+      const newSessions: CycleItem[] = Array.from({ length: freq }, (_, i) => ({
+        id: generateId('item'),
+        subjectId: newSub.id,
+        cycleId: `cycle-${Date.now()}`,
+        duration: dur,
+        completed: false,
+        order: startOrder + i
+      }));
+      setCycleItems(prev => [...prev, ...newSessions]);
     }
     setIsModalOpen(false);
-  }, [editingSubject, subjects, cycleItems.length, generateCycle]);
+  }, [editingSubject, subjects, cycleItems]);
 
   if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-brand-blue font-black animate-pulse">CARREGANDO...</div>;
   if (!session) return <Auth onSuccess={setSession} />;
@@ -239,7 +258,7 @@ const App: React.FC = () => {
           <PomodoroTimer />
           <PerformanceRank subjects={subjects} />
           <div className="space-y-4">
-             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Matérias Ativas</h3>
+             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Disciplinas Ativas</h3>
              {uniqueSubjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={id => { setSubjects(p => p.filter(sub => sub.id !== id)); }} onEdit={s => { setEditingSubject(s); setIsModalOpen(true); }} />)}
           </div>
         </div>
@@ -251,16 +270,16 @@ const App: React.FC = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
           <form onSubmit={handleAddSubject} className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-lg p-10 shadow-2xl space-y-6">
-            <h2 className="text-xl font-black uppercase text-center">{editingSubject ? 'Editar' : 'Nova'} Matéria</h2>
+            <h2 className="text-xl font-black uppercase text-center">{editingSubject ? 'Editar' : 'Nova'} Disciplina</h2>
             <input name="name" defaultValue={editingSubject?.name} placeholder="Nome da Disciplina" required className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 font-bold outline-none focus:border-brand-blue" />
             <div className="grid grid-cols-2 gap-4">
-              <input name="totalHours" type="number" defaultValue={editingSubject?.totalHours} placeholder="Carga Horária" className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 font-bold outline-none" />
-              <input name="frequency" type="number" defaultValue={editingSubject?.frequency} placeholder="Vezes no Ciclo" className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 font-bold outline-none" />
+              <input name="totalHours" type="number" defaultValue={editingSubject?.totalHours} placeholder="Carga Horária Total" className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 font-bold outline-none" />
+              <input name="frequency" type="number" defaultValue={editingSubject?.frequency} placeholder="Frequência no Ciclo" className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 font-bold outline-none" />
             </div>
             <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} placeholder="Link do Caderno (opcional)" className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 outline-none" />
             <div className="flex gap-4">
               <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 font-black text-slate-400 uppercase text-[10px]">Cancelar</button>
-              <button type="submit" className="flex-1 p-4 rounded-2xl bg-brand-blue text-white font-black uppercase text-[10px]">Confirmar</button>
+              <button type="submit" className="flex-1 p-4 rounded-2xl bg-brand-blue text-white font-black uppercase text-[10px]">Salvar</button>
             </div>
           </form>
         </div>
