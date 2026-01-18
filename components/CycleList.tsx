@@ -8,13 +8,13 @@ interface CycleListProps {
   onToggleComplete: (itemId: string) => void;
   onUpdatePerformance: (itemId: string, value: number) => void;
   onUpdateUrl: (itemId: string, url: string) => void;
-  onReorder: (draggedId: string, targetId: string) => void;
+  onMoveItem: (itemId: string, direction: 'up' | 'down') => void;
   onAppendCycle: () => void;
   onUpdateSubjectTopics: (subjectId: string, topics: Topic[]) => void;
 }
 
 const CycleList: React.FC<CycleListProps> = ({ 
-  items, subjects, onToggleComplete, onUpdatePerformance, onUpdateUrl, onReorder, onAppendCycle, onUpdateSubjectTopics
+  items, subjects, onToggleComplete, onUpdatePerformance, onUpdateUrl, onMoveItem, onAppendCycle, onUpdateSubjectTopics
 }) => {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [newTopicName, setNewTopicName] = useState("");
@@ -91,7 +91,9 @@ const CycleList: React.FC<CycleListProps> = ({
       </div>
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
-        <div className="grid grid-cols-[100px_1fr_120px_120px_40px] items-center gap-4 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+        {/* Header da Grid com nova coluna de Order */}
+        <div className="grid grid-cols-[40px_100px_1fr_100px_100px_40px] items-center gap-2 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+          <div /> 
           <div className="text-center">
             <span className="text-[10px] font-black text-slate-900 dark:text-slate-100 uppercase tracking-[0.2em]">Status</span>
           </div> 
@@ -108,17 +110,35 @@ const CycleList: React.FC<CycleListProps> = ({
         </div>
 
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
-          {sortedItems.map((item) => {
+          {sortedItems.map((item, idx) => {
             const sub = getSubject(item.subjectId);
             if (!sub) return null;
             const isExpanded = expandedItemId === item.id;
             const isEditingUrl = editingUrlId === item.id;
 
             return (
-              <div key={item.id} className={`${item.completed ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''} transition-all duration-300`}>
+              <div key={item.id} className={`${item.completed ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''} transition-all duration-300 group/row`}>
                 <div 
-                  className={`grid grid-cols-[100px_1fr_120px_120px_40px] items-center gap-4 px-6 py-5 cursor-default hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${isExpanded ? 'bg-blue-50/20 dark:bg-blue-900/10 border-l-4 border-l-brand-blue' : ''}`}
+                  className={`grid grid-cols-[40px_100px_1fr_100px_100px_40px] items-center gap-2 px-6 py-5 cursor-default hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${isExpanded ? 'bg-blue-50/20 dark:bg-blue-900/10 border-l-4 border-l-brand-blue' : ''}`}
                 >
+                  {/* Botões de Reordenar */}
+                  <div className="flex flex-col gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                    <button 
+                      disabled={idx === 0} 
+                      onClick={() => onMoveItem(item.id, 'up')}
+                      className="p-1 text-slate-300 hover:text-brand-blue disabled:opacity-10"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
+                    </button>
+                    <button 
+                      disabled={idx === sortedItems.length - 1} 
+                      onClick={() => onMoveItem(item.id, 'down')}
+                      className="p-1 text-slate-300 hover:text-brand-blue disabled:opacity-10"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                    </button>
+                  </div>
+
                   <div className="flex justify-center">
                     <button 
                       onClick={() => onToggleComplete(item.id)}
@@ -207,7 +227,10 @@ const CycleList: React.FC<CycleListProps> = ({
                         max="100"
                         value={item.performance ?? ""} 
                         placeholder="--" 
-                        onChange={e => onUpdatePerformance(item.id, Number(e.target.value))}
+                        onChange={e => {
+                          const val = Number(e.target.value);
+                          if (val <= 100) onUpdatePerformance(item.id, val);
+                        }}
                         className="w-8 bg-transparent text-right text-xs font-black outline-none border-none p-0" 
                       />
                       {(item.performance !== undefined && item.performance !== null && !isNaN(item.performance)) && (
