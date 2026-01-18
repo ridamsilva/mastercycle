@@ -27,8 +27,8 @@ export const supabaseService = {
   // --- DATA ---
   async fetchSubjects(): Promise<Subject[] | null> {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return null;
 
       const { data, error } = await supabase
@@ -38,7 +38,7 @@ export const supabaseService = {
       
       if (error) throw error;
       
-      return data.map(s => ({
+      return (data || []).map(s => ({
         id: s.id,
         name: s.name,
         totalHours: s.total_hours ?? s.totalHours ?? 0,
@@ -56,15 +56,15 @@ export const supabaseService = {
 
   async upsertSubjects(subjects: Subject[]) {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user || subjects.length === 0) return;
 
       const formattedSubjects = subjects.map(s => ({
         id: s.id,
         user_id: user.id,
         name: s.name,
-        total_hours: s.totalHours,
+        total_hours: s.totalHours, // Padrão snake_case
         frequency: s.frequency,
         notebook_url: s.notebookUrl || null,
         mastery_percentage: s.masteryPercentage || 0,
@@ -76,35 +76,20 @@ export const supabaseService = {
         .from('subjects')
         .upsert(formattedSubjects, { onConflict: 'id' });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Erro crítico no Upsert Subjects (Verifique se as colunas total_hours e mastery_percentage existem):", error);
+        throw error;
+      }
     } catch (error: any) {
-      console.error('Erro ao salvar disciplinas:', error.message);
-    }
-  },
-
-  async deleteSubject(id: string) {
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      if (!user) return;
-
-      const { error } = await supabase
-        .from('subjects')
-        .delete()
-        .match({ id: id, user_id: user.id });
-      
-      if (error) throw error;
-      return true;
-    } catch (error: any) {
-      console.error('Erro ao excluir:', error.message);
+      console.error('Falha na persistência de disciplinas:', error.message);
       throw error;
     }
   },
 
   async fetchCycleItems(): Promise<CycleItem[] | null> {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return null;
 
       const { data, error } = await supabase
@@ -115,7 +100,7 @@ export const supabaseService = {
 
       if (error) throw error;
 
-      return data.map(item => ({
+      return (data || []).map(item => ({
         id: item.id,
         subjectId: item.subject_id ?? item.subjectId,
         duration: item.duration,
@@ -133,14 +118,14 @@ export const supabaseService = {
 
   async upsertCycleItems(items: CycleItem[]) {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user || items.length === 0) return;
       
       const formattedItems = items.map(item => ({
         id: item.id,
         user_id: user.id,
-        subject_id: item.subjectId,
+        subject_id: item.subjectId, // Padrão snake_case
         duration: item.duration,
         completed: item.completed,
         order: item.order,
@@ -153,9 +138,27 @@ export const supabaseService = {
         .from('cycle_items')
         .upsert(formattedItems, { onConflict: 'id' });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Erro crítico no Upsert Cycle Items (Verifique se as colunas subject_id e completed_at existem):", error);
+        throw error;
+      }
     } catch (error: any) {
-      console.error('Erro ao salvar ciclo:', error.message);
+      console.error('Falha na persistência do ciclo:', error.message);
+      throw error;
+    }
+  },
+
+  async deleteSubject(id: string) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) return;
+      const { error } = await supabase.from('subjects').delete().match({ id: id, user_id: user.id });
+      if (error) throw error;
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao excluir:', error.message);
+      throw error;
     }
   }
 };
