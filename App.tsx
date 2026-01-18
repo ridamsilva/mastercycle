@@ -30,7 +30,6 @@ const App: React.FC = () => {
   const isInitialLoadRef = useRef(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auth State Management
   useEffect(() => {
     supabaseService.getSession().then(session => {
       setSession(session);
@@ -53,7 +52,6 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Hydration logic
   useEffect(() => {
     if (!session || isInitialLoadRef.current) return;
 
@@ -87,7 +85,6 @@ const App: React.FC = () => {
     hydrate();
   }, [session]);
 
-  // Autosave
   useEffect(() => {
     if (!isInitialLoadRef.current || !session) return;
 
@@ -103,6 +100,7 @@ const App: React.FC = () => {
         await supabaseService.upsertCycleItems(cycleItems);
         setSyncStatus('success');
       } catch (e) {
+        console.error("Erro no sync automático:", e);
         setSyncStatus('error');
       }
     }, 2000);
@@ -114,7 +112,6 @@ const App: React.FC = () => {
     localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
   }, [isDarkMode]);
 
-  // GERAÇÃO DE CICLO INTELIGENTE COM HERANÇA DE NOTA
   const generateCycle = useCallback(async (currentSubjects: Subject[], prevItems: CycleItem[] = [], resetCompleted = false) => {
     if (currentSubjects.length === 0) {
       setCycleItems([]);
@@ -163,8 +160,9 @@ const App: React.FC = () => {
           ? lastPerformanceMap[sId] ?? subConfig?.masteryPercentage 
           : existing?.performance ?? lastPerformanceMap[sId] ?? subConfig?.masteryPercentage;
 
+        // CRITICAL: Usamos IDs únicos reais para evitar erro 42501 de RLS no Supabase
         newItems.push({
-          id: `slot-${i}`, 
+          id: existing?.id || `item-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`, 
           subjectId: sId,
           duration: selected.duration,
           completed: resetCompleted ? false : (existing?.completed || false),
@@ -180,7 +178,7 @@ const App: React.FC = () => {
     }
 
     setCycleItems(newItems);
-  }, [session]);
+  }, []);
 
   const handleUpdateUrl = (itemId: string, url: string) => {
     const item = cycleItems.find(i => i.id === itemId);
@@ -211,8 +209,7 @@ const App: React.FC = () => {
 
       return list.map((item, idx) => ({
         ...item,
-        order: idx,
-        id: `slot-${idx}`
+        order: idx
       }));
     });
   };
@@ -242,7 +239,7 @@ const App: React.FC = () => {
       } : s);
     } else {
       const newSubject: Subject = {
-        id: `sub-${Date.now()}`,
+        id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         name, totalHours, frequency, notebookUrl, masteryPercentage: masteryValue,
         color: COLORS[subjects.length % COLORS.length],
         topics: []
@@ -280,10 +277,10 @@ const App: React.FC = () => {
   if (!session) return <Auth onSuccess={setSession} />;
 
   return (
-    <div className="min-h-screen pb-12 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 font-inter text-slate-900 dark:text-slate-100">
-      <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 px-4 h-20 flex items-center justify-between shadow-sm">
+    <div className="min-h-screen pb-24 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 font-inter text-slate-900 dark:text-slate-100">
+      <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 px-4 h-20 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 relative group">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 relative group">
              <svg viewBox="0 0 250 250" className="w-full h-full drop-shadow-md">
                 <path d="M125 35 A 90 90 0 0 0 35 125" fill="none" stroke="#0066b2" strokeWidth="18" strokeLinecap="round" />
                 <path d="M110 20 L 145 35 L 110 50 Z" fill="#0066b2" />
@@ -295,7 +292,6 @@ const App: React.FC = () => {
                 </g>
                 <g transform="rotate(40, 125, 125) translate(38, -84)">
                   <path d="M110 30 L 140 30 L 140 100 L 110 100 Z" fill="#0066b2" />
-                  <path d="M110 30 Q 125 15 140 30" fill="#0066b2" />
                   <rect x="108" y="100" width="34" height="6" fill="#cbd5e1" />
                   <path d="M110 106 L 140 106 L 135 160 L 115 160 Z" fill="#f37021" />
                   <path d="M115 160 L 135 160 L 125 190 Z" fill="white" />
@@ -304,30 +300,30 @@ const App: React.FC = () => {
              </svg>
           </div>
           <div className="flex flex-col">
-            <div className="flex text-xl font-black tracking-tighter uppercase leading-none">
+            <div className="flex text-lg sm:text-xl font-black tracking-tighter uppercase leading-none">
               <span className="text-[#0066b2]">MASTER</span>
               <span className="text-[#f37021]">CYCLE</span>
             </div>
-            <div className="flex items-center gap-1.5 mt-2">
-              <div className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">
+            <div className="flex items-center gap-1.5 mt-1 sm:mt-2">
+              <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+              <span className="text-[8px] sm:text-[9px] font-black uppercase text-slate-400 tracking-wider">
                 {syncStatus === 'syncing' ? 'Salvando' : syncStatus === 'error' ? 'Erro' : 'Cloud On'}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all hover:bg-slate-200 dark:hover:bg-slate-700">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all">
             {isDarkMode ? '☀️' : '🌙'}
           </button>
-          <button onClick={() => setIsStatsOpen(true)} className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-[#0066b2] transition-all hover:scale-105">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" /></svg>
+          <button onClick={() => setIsStatsOpen(true)} className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800 text-[#0066b2] transition-all">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" /></svg>
           </button>
-          {/* Botão Nova Matéria no Header (Adaptativo) */}
+          {/* BOTÃO CABEÇALHO - AGORA SEMPRE VISÍVEL NO MOBILE COMO + */}
           <button 
             onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} 
-            className="flex items-center justify-center sm:px-6 py-3 min-w-[48px] bg-[#0066b2] text-white rounded-2xl shadow-lg hover:bg-brand-darkBlue transition-all active:scale-95"
+            className="flex items-center justify-center h-10 sm:h-12 px-4 sm:px-6 bg-[#0066b2] text-white rounded-xl sm:rounded-2xl shadow-lg hover:bg-brand-darkBlue transition-all active:scale-95"
           >
             <span className="hidden sm:inline text-[10px] font-black uppercase tracking-[0.2em]">Nova Matéria</span>
             <span className="sm:hidden text-2xl font-black">+</span>
@@ -335,10 +331,10 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Botão Flutuante (FAB) Mobile */}
+      {/* BOTÃO FLUTUANTE (FAB) PARA MOBILE - GARANTE QUE ESTEJA SEMPRE ACESSÍVEL */}
       <button 
         onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }}
-        className="sm:hidden fixed bottom-6 right-6 z-40 w-16 h-16 bg-brand-blue text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-black transition-transform active:scale-90 border-4 border-white dark:border-slate-900"
+        className="lg:hidden fixed bottom-6 right-6 z-[60] w-14 h-14 bg-[#0066b2] text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-black transition-transform active:scale-90 border-4 border-white dark:border-slate-900"
       >
         +
       </button>
@@ -363,11 +359,10 @@ const App: React.FC = () => {
           <div className="space-y-4">
              <div className="flex items-center justify-between">
                 <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Suas Disciplinas</h3>
-                <button onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} className="sm:hidden px-4 py-2 bg-brand-blue/10 text-brand-blue text-[8px] font-black rounded-xl uppercase tracking-wider">
-                  + NOVA
-                </button>
              </div>
-             {subjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={deleteSubject} onEdit={(sub) => { setEditingSubject(sub); setMasteryValue(sub.masteryPercentage); setIsModalOpen(true); }} />)}
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+               {subjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={deleteSubject} onEdit={(sub) => { setEditingSubject(sub); setMasteryValue(sub.masteryPercentage); setIsModalOpen(true); }} />)}
+             </div>
           </div>
         </div>
       </main>
@@ -375,39 +370,39 @@ const App: React.FC = () => {
       {isStatsOpen && <UserProfile subjects={subjects} cycleItems={cycleItems} onClose={() => setIsStatsOpen(false)} />}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-lg p-10 shadow-2xl overflow-y-auto max-h-[90vh] border border-slate-200 dark:border-slate-800">
-            <form onSubmit={handleAddOrEditSubject} className="space-y-8">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] sm:rounded-[40px] w-full max-w-lg p-6 sm:p-10 shadow-2xl overflow-y-auto max-h-[90vh] border border-slate-200 dark:border-slate-800">
+            <form onSubmit={handleAddOrEditSubject} className="space-y-6 sm:space-y-8">
               <div className="space-y-2 text-center">
-                <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">{editingSubject ? 'Editar' : 'Nova'} Disciplina</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">{editingSubject ? 'Editar' : 'Nova'} Disciplina</h2>
               </div>
-              <div className="space-y-5">
+              <div className="space-y-4 sm:space-y-5">
                 <div className="space-y-1">
                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nome</label>
-                   <input name="name" defaultValue={editingSubject?.name} required className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
+                   <input name="name" defaultValue={editingSubject?.name} required className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Horas Totais</label>
-                    <input name="totalHours" type="number" step="0.5" defaultValue={editingSubject?.totalHours || 1} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
+                    <input name="totalHours" type="number" step="0.5" defaultValue={editingSubject?.totalHours || 1} className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Repetições</label>
-                    <input name="frequency" type="number" min="1" defaultValue={editingSubject?.frequency || 1} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
+                    <input name="frequency" type="number" min="1" defaultValue={editingSubject?.frequency || 1} className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
                   </div>
                 </div>
                 <div className="space-y-1">
                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Link Base (Opcional)</label>
-                   <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-medium outline-none focus:border-[#0066b2] transition-all" />
+                   <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-medium outline-none focus:border-[#0066b2] transition-all" />
                 </div>
               </div>
-              <div className="flex flex-col gap-4">
-                <div className="flex gap-4">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-5 rounded-2xl bg-slate-100 font-black dark:bg-slate-800 text-slate-500 uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
-                  <button type="submit" className="flex-1 p-5 rounded-2xl bg-[#0066b2] text-white font-black uppercase text-[10px] tracking-widest hover:bg-brand-darkBlue transition-all">Salvar</button>
+              <div className="flex flex-col gap-3 sm:gap-4">
+                <div className="flex gap-3 sm:gap-4">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-4 rounded-xl sm:rounded-2xl bg-slate-100 font-black dark:bg-slate-800 text-slate-500 uppercase text-[10px] tracking-widest">Cancelar</button>
+                  <button type="submit" className="flex-1 p-4 rounded-xl sm:rounded-2xl bg-[#0066b2] text-white font-black uppercase text-[10px] tracking-widest hover:bg-brand-darkBlue">Salvar</button>
                 </div>
                 {editingSubject && (
-                  <button type="button" onClick={() => deleteSubject(editingSubject.id)} className="w-full p-4 rounded-2xl text-rose-500 font-black uppercase text-[9px] tracking-[0.2em] border border-rose-100 dark:border-rose-900/40 hover:bg-rose-50 transition-all">Excluir Matéria</button>
+                  <button type="button" onClick={() => deleteSubject(editingSubject.id)} className="w-full p-3 rounded-xl text-rose-500 font-black uppercase text-[9px] tracking-[0.2em] border border-rose-100 dark:border-rose-900/40">Excluir Matéria</button>
                 )}
               </div>
             </form>
