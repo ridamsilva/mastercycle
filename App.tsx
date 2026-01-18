@@ -181,6 +181,17 @@ const App: React.FC = () => {
     const hours = Math.max(0, Number(fd.get('totalHours')));
     const url = String(fd.get('notebookUrl'));
 
+    // Validação de Duplicidade
+    const isDuplicate = subjects.some(s => 
+      s.name.toLowerCase() === name.toLowerCase() && 
+      (!editingSubject || s.id !== editingSubject.id)
+    );
+
+    if (isDuplicate) {
+      alert(`Erro: Já existe uma disciplina cadastrada com o nome "${name}". Por favor, escolha um nome diferente.`);
+      return;
+    }
+
     if (editingSubject) {
       setSubjects(p => p.map(s => s.id === editingSubject.id ? { ...s, name, totalHours: hours, frequency: freq, notebookUrl: url } : s));
       
