@@ -25,7 +25,7 @@ const PerformanceRank: React.FC<PerformanceRankProps> = ({ subjects }) => {
       </div>
       
       <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mb-4">
-        Zonas de Atenção (Piores Médias)
+        Zonas de Atenção
       </p>
 
       <div className="space-y-3">
@@ -34,7 +34,7 @@ const PerformanceRank: React.FC<PerformanceRankProps> = ({ subjects }) => {
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-xs font-black text-slate-300 dark:text-slate-700 w-4">{index + 1}º</span>
               <div className="w-1.5 h-6 rounded-full shadow-sm" style={{ backgroundColor: subject.color }} />
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[100px]">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[100px] uppercase">
                 {subject.name}
               </span>
             </div>
@@ -42,14 +42,15 @@ const PerformanceRank: React.FC<PerformanceRankProps> = ({ subjects }) => {
               <div className="w-16 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
                 <div 
                   className={`h-full transition-all duration-700 ${
-                    subject.masteryPercentage < 60 ? 'bg-rose-500' : 
-                    subject.masteryPercentage < 80 ? 'bg-amber-500' : 'bg-green-500'
+                    subject.masteryPercentage < 70 ? 'bg-rose-500' : 
+                    subject.masteryPercentage < 80 ? 'bg-amber-500' : 'bg-emerald-500'
                   }`}
                   style={{ width: `${subject.masteryPercentage}%` }}
                 />
               </div>
               <span className={`text-[10px] font-black w-8 text-right ${
-                subject.masteryPercentage < 60 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-400'
+                subject.masteryPercentage < 70 ? 'text-rose-600 dark:text-rose-400' : 
+                subject.masteryPercentage < 80 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
               }`}>
                 {subject.masteryPercentage}%
               </span>
@@ -57,12 +58,6 @@ const PerformanceRank: React.FC<PerformanceRankProps> = ({ subjects }) => {
           </div>
         ))}
       </div>
-
-      {rankedSubjects.length > 5 && (
-        <p className="text-[9px] text-center text-slate-400 dark:text-slate-600 mt-4 font-bold uppercase tracking-widest">
-          +{rankedSubjects.length - 5} outras disciplinas
-        </p>
-      )}
     </div>
   );
 };

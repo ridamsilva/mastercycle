@@ -3,7 +3,7 @@ export interface Topic {
   id: string;
   name: string;
   completed: boolean;
-  duration: number; // em horas ou minutos, manteremos consistente com o app (horas)
+  duration: number;
   performance?: number;
   materialUrl?: string;
 }
@@ -26,8 +26,8 @@ export interface CycleItem {
   completed: boolean;
   order: number;
   performance?: number;
-  sessionUrl?: string; // Specific link for this session if different/added via cycle
-  completedAt?: number; // Timestamp of completion
+  sessionUrl?: string;
+  completedAt?: number;
 }
 
 export interface StudyCycle {

@@ -11,6 +11,19 @@ interface SubjectCardProps {
 const SubjectCard: React.FC<SubjectCardProps> = ({ subject, onDelete, onEdit }) => {
   const sessionDuration = (subject.totalHours / subject.frequency).toFixed(1);
 
+  // NOVA ESCALA SOLICITADA
+  const getProgressColor = (val: number) => {
+    if (val < 70) return 'bg-rose-500';
+    if (val < 80) return 'bg-amber-500';
+    return 'bg-emerald-500';
+  };
+
+  const getTextColor = (val: number) => {
+    if (val < 70) return 'text-rose-600 dark:text-rose-400';
+    if (val < 80) return 'text-amber-600 dark:text-amber-400';
+    return 'text-emerald-600 dark:text-emerald-400';
+  };
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 hover:shadow-md dark:hover:border-slate-700 transition-all">
       <div className="flex items-center justify-between mb-3">
@@ -19,7 +32,7 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, onDelete, onEdit }) 
             className="w-3 h-3 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)]" 
             style={{ backgroundColor: subject.color }} 
           />
-          <h3 className="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[150px]">{subject.name}</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[150px] uppercase text-xs">{subject.name}</h3>
         </div>
         <div className="flex gap-1">
           <button 
@@ -43,25 +56,25 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, onDelete, onEdit }) 
         </div>
       </div>
       
-      <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 dark:text-slate-400 mb-4">
+      <div className="grid grid-cols-2 gap-4 text-[10px] text-slate-500 dark:text-slate-400 mb-4 font-bold uppercase tracking-wider">
         <div>
-          <span className="block font-medium text-slate-700 dark:text-slate-300">{subject.totalHours}h Totais</span>
-          Carga Horária
+          <span className="block font-black text-slate-700 dark:text-slate-300">{subject.totalHours}h Totais</span>
+          Carga
         </div>
         <div>
-          <span className="block font-medium text-slate-700 dark:text-slate-300">{subject.frequency}x</span>
-          {sessionDuration}h por sessão
+          <span className="block font-black text-slate-700 dark:text-slate-300">{subject.frequency}x</span>
+          {sessionDuration}h/sessão
         </div>
       </div>
 
       <div className="mb-4">
-        <div className="flex justify-between items-center text-xs mb-1">
-          <span className="text-slate-500 dark:text-slate-400">Domínio da Matéria</span>
-          <span className="font-semibold text-indigo-600 dark:text-indigo-400">{subject.masteryPercentage}%</span>
+        <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest mb-1">
+          <span className="text-slate-500 dark:text-slate-400">Domínio</span>
+          <span className={`${getTextColor(subject.masteryPercentage)}`}>{subject.masteryPercentage}%</span>
         </div>
         <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
           <div 
-            className="h-1.5 rounded-full bg-indigo-500 transition-all duration-500" 
+            className={`h-1.5 rounded-full transition-all duration-500 ${getProgressColor(subject.masteryPercentage)}`} 
             style={{ width: `${subject.masteryPercentage}%` }}
           />
         </div>
@@ -69,16 +82,12 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, onDelete, onEdit }) 
 
       {subject.notebookUrl && (
         <a 
-          href={subject.notebookUrl} 
+          href={subject.notebookUrl.startsWith('http') ? subject.notebookUrl : `https://${subject.notebookUrl}`} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
+          className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-            <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-          </svg>
-          Caderno de Questões
+          Caderno
         </a>
       )}
     </div>

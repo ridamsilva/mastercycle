@@ -36,7 +36,17 @@ export const supabaseService = {
         .eq('user_id', user.id); 
       
       if (error) throw error;
-      return data as Subject[];
+      
+      return data.map(s => ({
+        id: s.id,
+        name: s.name,
+        totalHours: s.total_hours ?? s.totalHours ?? 0,
+        frequency: s.frequency,
+        notebookUrl: s.notebook_url ?? s.notebookUrl ?? "",
+        masteryPercentage: s.mastery_percentage ?? s.masteryPercentage ?? 0,
+        color: s.color,
+        topics: s.topics || []
+      })) as Subject[];
     } catch (error: any) {
       console.error('Erro ao buscar disciplinas:', error.message);
       return null;
@@ -52,10 +62,10 @@ export const supabaseService = {
         id: s.id,
         user_id: user.id,
         name: s.name,
-        totalHours: s.totalHours,
+        total_hours: s.totalHours,
         frequency: s.frequency,
-        notebookUrl: s.notebookUrl || null,
-        masteryPercentage: s.masteryPercentage || 0,
+        notebook_url: s.notebookUrl || null,
+        mastery_percentage: s.masteryPercentage || 0,
         color: s.color,
         topics: s.topics || []
       }));
@@ -75,7 +85,6 @@ export const supabaseService = {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Graças ao ON DELETE CASCADE no SQL, deletar a matéria já limpa o ciclo
       const { error } = await supabase
         .from('subjects')
         .delete()
@@ -101,7 +110,17 @@ export const supabaseService = {
         .order('order', { ascending: true });
 
       if (error) throw error;
-      return data as CycleItem[];
+
+      return data.map(item => ({
+        id: item.id,
+        subjectId: item.subject_id ?? item.subjectId,
+        duration: item.duration,
+        completed: item.completed,
+        order: item.order,
+        performance: item.performance || 0,
+        sessionUrl: item.session_url ?? item.sessionUrl ?? "",
+        completedAt: item.completed_at ?? item.completedAt ?? undefined
+      })) as CycleItem[];
     } catch (error: any) {
       console.error('Erro ao buscar ciclo:', error.message);
       return null;
@@ -116,13 +135,13 @@ export const supabaseService = {
       const formattedItems = items.map(item => ({
         id: item.id,
         user_id: user.id,
-        subjectId: item.subjectId,
+        subject_id: item.subjectId,
         duration: item.duration,
         completed: item.completed,
         order: item.order,
         performance: item.performance || 0,
-        sessionUrl: item.sessionUrl || null,
-        completedAt: item.completedAt || null
+        session_url: item.sessionUrl || null,
+        completed_at: item.completedAt || null
       }));
 
       const { error } = await supabase
