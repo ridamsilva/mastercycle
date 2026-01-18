@@ -157,14 +157,12 @@ const App: React.FC = () => {
   const handleUpdateUrl = (itemId: string, url: string) => {
     const item = cycleItems.find(i => i.id === itemId);
     if (!item) return;
-    // Sincroniza o link para todas as instâncias da disciplina no ciclo
     setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, sessionUrl: url } : i));
   };
 
   const handleUpdatePerformance = (itemId: string, val: number) => {
     const item = cycleItems.find(i => i.id === itemId);
     if (!item) return;
-    // Sincroniza a nota para todas as instâncias da disciplina no ciclo e na disciplina master
     setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, performance: val } : i));
     setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, masteryPercentage: val } : s));
   };
@@ -202,10 +200,14 @@ const App: React.FC = () => {
   };
 
   const deleteSubject = async (id: string) => {
-    if (!confirm("Excluir disciplina?")) return;
+    if (!confirm(`Deseja realmente excluir esta disciplina? Ela será removida de todos os ciclos não concluídos.`)) return;
+    
     setSubjects(prev => prev.filter(s => s.id !== id));
-    setCycleItems(prev => prev.filter(item => item.subjectId !== id));
+    // Remove do ciclo apenas itens que NÃO foram concluídos
+    setCycleItems(prev => prev.filter(item => item.subjectId !== id || item.completed === true));
+    
     if (session) await supabaseService.deleteSubject(id);
+    setIsModalOpen(false);
   };
 
   if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-[#0066b2] font-black animate-pulse uppercase tracking-[0.5em]">Carregando MasterCycle...</div>;
@@ -330,9 +332,21 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-5 rounded-2xl bg-slate-100 font-black dark:bg-slate-800 text-slate-500 uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
-                <button type="submit" className="flex-1 p-5 rounded-2xl bg-[#0066b2] text-white font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100 dark:shadow-none hover:bg-[#004a80] transition-all">Salvar</button>
+              <div className="flex flex-col gap-4">
+                <div className="flex gap-4">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-5 rounded-2xl bg-slate-100 font-black dark:bg-slate-800 text-slate-500 uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
+                  <button type="submit" className="flex-1 p-5 rounded-2xl bg-[#0066b2] text-white font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100 dark:shadow-none hover:bg-[#004a80] transition-all">Salvar</button>
+                </div>
+                
+                {editingSubject && (
+                  <button 
+                    type="button" 
+                    onClick={() => deleteSubject(editingSubject.id)}
+                    className="w-full p-4 rounded-2xl text-rose-500 font-black uppercase text-[9px] tracking-[0.2em] border border-rose-100 dark:border-rose-900/40 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all"
+                  >
+                    Excluir Disciplina do Plano
+                  </button>
+                )}
               </div>
             </form>
           </div>

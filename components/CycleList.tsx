@@ -110,7 +110,7 @@ const CycleList: React.FC<CycleListProps> = ({
             const isEditingUrl = editingUrlId === item.id;
 
             return (
-              <div key={item.id} className={`${item.completed ? 'opacity-50 grayscale-[0.5] bg-slate-50/50 dark:bg-slate-800/20' : ''} transition-all duration-300`}>
+              <div key={item.id} className={`${item.completed ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''} transition-all duration-300`}>
                 <div 
                   className={`grid grid-cols-[100px_1fr_80px_120px_40px] items-center gap-4 px-6 py-5 cursor-default hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${isExpanded ? 'bg-blue-50/20 dark:bg-blue-900/10 border-l-4 border-l-brand-blue' : ''}`}
                 >
@@ -126,7 +126,7 @@ const CycleList: React.FC<CycleListProps> = ({
                   <div className="min-w-0 cursor-pointer" onClick={() => setExpandedItemId(isExpanded ? null : item.id)}>
                     <div className="flex items-center gap-2 mb-0.5">
                       <div className="w-1.5 h-3 rounded-full" style={{ backgroundColor: sub.color }} />
-                      <h4 className={`font-black text-sm uppercase truncate ${item.completed ? 'text-slate-400' : 'text-slate-800 dark:text-white'}`}>{sub.name}</h4>
+                      <h4 className={`font-black text-sm uppercase truncate ${item.completed ? 'text-slate-700 dark:text-slate-200' : 'text-slate-800 dark:text-white'}`}>{sub.name}</h4>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="text-[9px] font-black text-brand-blue/70 uppercase tracking-widest">{item.duration}H</span>
