@@ -22,7 +22,9 @@ export interface Subject {
 export interface CycleItem {
   id: string;
   subjectId: string;
-  cycleId: string; // Identificador do ciclo ao qual pertence
+  subjectName?: string; // Persistência para histórico
+  subjectColor?: string; // Persistência para histórico
+  cycleId: string;
   duration: number;
   completed: boolean;
   order: number;

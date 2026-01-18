@@ -17,7 +17,9 @@ const CycleRow = React.memo(({
   item, idx, sub, isExpanded, isEditingUrl, totalCount,
   onToggle, onExpand, onEditUrl, onUpdatePerf, onMove, onUpdateUrl 
 }: any) => {
-  if (!sub) return null;
+  // Se a disciplina foi excluída, usamos os metadados salvos no item
+  const displayName = item.subjectName || sub?.name || 'Disciplina Excluída';
+  const displayColor = item.subjectColor || sub?.color || '#cbd5e1';
 
   const getPerformanceStyles = (val: number | undefined) => {
     if (val === undefined || val === null || isNaN(val)) return 'bg-slate-100 dark:bg-slate-800 text-slate-400';
@@ -56,8 +58,8 @@ const CycleRow = React.memo(({
         
         <div className="min-w-0 cursor-pointer" onClick={() => onExpand(isExpanded ? null : item.id)}>
           <div className="flex items-center gap-1.5 mb-0.5">
-            <div className="shrink-0 w-1 h-2.5 rounded-full" style={{ backgroundColor: sub.color }} />
-            <h4 className={`font-black text-[10px] sm:text-sm uppercase truncate ${item.completed ? 'text-slate-500 line-through' : 'text-slate-800 dark:text-white'}`}>{sub.name}</h4>
+            <div className="shrink-0 w-1 h-2.5 rounded-full" style={{ backgroundColor: displayColor }} />
+            <h4 className={`font-black text-[10px] sm:text-sm uppercase truncate ${item.completed ? 'text-slate-500 line-through' : 'text-slate-800 dark:text-white'}`}>{displayName}</h4>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[7px] sm:text-[9px] font-black text-brand-blue/70 uppercase tracking-widest">{item.duration}H</span>
@@ -104,19 +106,11 @@ const CycleList: React.FC<CycleListProps> = ({
   const [editingUrlId, setEditingUrlId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(true);
 
-  // Filtra itens por status para melhor organização visual
   const activeItems = useMemo(() => items.filter(i => !i.completed).sort((a, b) => a.order - b.order), [items]);
-  
-  // Ordenar histórico: mais recentes (completedAt maior) ficam no topo do bloco de histórico
   const completedItems = useMemo(() => items.filter(i => i.completed).sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)), [items]);
 
-  const canRenovate = activeItems.length === 0 && items.length > 0;
-
-  if (items.length === 0) return (
-    <div className="py-20 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] text-center">
-      <p className="text-sm font-black uppercase tracking-widest opacity-30">Seu ciclo de estudos aparecerá aqui</p>
-    </div>
-  );
+  const canRenovate = activeItems.length === 0 && subjects.length > 0;
+  const isFirstCycle = items.length === 0;
 
   return (
     <div className="space-y-8 pb-20">
@@ -126,26 +120,32 @@ const CycleList: React.FC<CycleListProps> = ({
             <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase flex items-center gap-2">
               <span className="w-1.5 h-5 bg-brand-blue rounded-full"></span> CICLO ATUAL
             </h2>
-            <p className="text-[10px] font-black text-brand-blue uppercase mt-1">Sessões em aberto: {activeItems.length}</p>
+            {/* Contador focado apenas nas pendentes */}
+            <p className="text-[10px] font-black text-brand-blue uppercase mt-1">Pendentes: {activeItems.length} de {items.length}</p>
           </div>
           {canRenovate && (
             <button 
               onClick={onAppendCycle} 
               className="px-6 py-3 bg-brand-orange text-white rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-orange-100 hover:scale-105 active:scale-95 transition-all animate-in zoom-in duration-300"
             >
-              Renovar Ciclo
+              {isFirstCycle ? 'Iniciar Ciclo' : 'Renovar Ciclo'}
             </button>
           )}
         </div>
-        <div className="flex gap-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-          {items.map(i => (
-            <div key={i.id} className={`flex-1 transition-all duration-300 ${i.completed ? 'opacity-100' : 'opacity-10'}`} style={{ backgroundColor: subjects.find(s => s.id === i.subjectId)?.color || '#ccc' }} />
-          ))}
-        </div>
+        
+        {items.length > 0 ? (
+          <div className="flex gap-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            {items.map(i => (
+              <div key={i.id} className={`flex-1 transition-all duration-300 ${i.completed ? 'opacity-100' : 'opacity-10'}`} style={{ backgroundColor: i.subjectColor || subjects.find(s => s.id === i.subjectId)?.color || '#ccc' }} />
+            ))}
+          </div>
+        ) : (
+          <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full w-full opacity-30" />
+        )}
       </div>
 
       <div className="space-y-4">
-        {activeItems.length > 0 && (
+        {activeItems.length > 0 ? (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] overflow-hidden shadow-sm">
             <div className="px-6 py-4 bg-blue-50/30 dark:bg-blue-900/10 border-b border-slate-100 dark:border-slate-800">
                <h3 className="text-[10px] font-black text-brand-blue uppercase tracking-widest">Sessões Pendentes</h3>
@@ -167,7 +167,15 @@ const CycleList: React.FC<CycleListProps> = ({
               ))}
             </div>
           </div>
-        )}
+        ) : subjects.length > 0 && items.length === 0 ? (
+           <div className="py-20 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] text-center">
+            <p className="text-sm font-black uppercase tracking-widest opacity-30">Clique em 'Iniciar Ciclo' para começar</p>
+          </div>
+        ) : subjects.length === 0 ? (
+          <div className="py-20 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] text-center">
+            <p className="text-sm font-black uppercase tracking-widest opacity-30">Adicione disciplinas para gerar seu ciclo</p>
+          </div>
+        ) : null}
 
         {completedItems.length > 0 && (
           <div className="space-y-4">

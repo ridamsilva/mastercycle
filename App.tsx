@@ -90,7 +90,7 @@ const App: React.FC = () => {
     localStorage.setItem('m_dark', String(isDarkMode));
   }, [isDarkMode]);
 
-  const generateCycle = useCallback((currentSubjects: Subject[], append = false) => {
+  const generateCycle = useCallback((currentSubjects: Subject[]) => {
     if (!currentSubjects.length) return;
     
     const lastDataMap = new Map();
@@ -105,39 +105,36 @@ const App: React.FC = () => {
     const newItems: CycleItem[] = [];
     const pool = currentSubjects.flatMap(s => {
       const dur = Number((s.totalHours / s.frequency).toFixed(2));
-      return Array.from({ length: s.frequency }, () => ({ sid: s.id, dur }));
+      return Array.from({ length: s.frequency }, () => ({ 
+        sid: s.id, 
+        sname: s.name, 
+        scolor: s.color, 
+        dur 
+      }));
     });
     
     const shuffled = pool.sort(() => Math.random() - 0.5);
-    const startOrder = append ? (cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) + 1 : 0) : 0;
     
     shuffled.forEach((p, i) => {
       const historyData = lastDataMap.get(p.sid);
       newItems.push({ 
         id: generateId('item'), 
         subjectId: p.sid, 
+        subjectName: p.sname,
+        subjectColor: p.scolor,
         cycleId: newCycleId,
         duration: p.dur, 
         completed: false, 
-        order: startOrder + i,
+        order: i,
         performance: historyData?.performance,
         sessionUrl: historyData?.sessionUrl
       });
     });
 
-    if (append) {
-      setCycleItems(prev => [...prev, ...newItems]);
-    } else {
-      setCycleItems(newItems);
-    }
+    setCycleItems(newItems);
   }, [cycleItems]);
 
   const handleRenovateCycle = useCallback(async () => {
-    const activeItems = cycleItems.filter(i => !i.completed);
-    if (activeItems.length > 0) {
-      if (!confirm("Você ainda possui sessões pendentes no ciclo atual. Deseja adicionar um novo ciclo mesmo assim?")) return;
-    }
-
     const done = cycleItems.filter(i => i.completed);
     if (done.length > 0) {
       const avg = Math.round(done.reduce((a, i) => a + (i.performance || 0), 0) / done.length);
@@ -147,13 +144,19 @@ const App: React.FC = () => {
         totalItems: done.length, 
         avgPerformance: avg, 
         totalHours: done.reduce((a, i) => a + i.duration, 0), 
-        cycleSnapshot: [...done] 
+        // Snapshot com metadados para persistência
+        cycleSnapshot: done.map(d => ({
+          ...d,
+          subjectName: d.subjectName || subjects.find(s => s.id === d.subjectId)?.name,
+          subjectColor: d.subjectColor || subjects.find(s => s.id === d.subjectId)?.color,
+        }))
       };
       setHistory(p => [entry, ...p]);
       if (session) supabaseService.saveHistoryEntry(entry);
     }
 
-    generateCycle(subjects, true);
+    // LIMPAR O CICLO ATUAL E GERAR UM NOVO APENAS COM AS MATÉRIAS ATIVAS
+    generateCycle(subjects);
   }, [cycleItems, subjects, session, generateCycle]);
 
   const handleMoveItem = useCallback((id: string, direction: 'up' | 'down') => {
@@ -208,12 +211,14 @@ const App: React.FC = () => {
       };
       setSubjects(p => [...p, newSub]);
       
-      // ADICIONAR AO CICLO ATUAL IMEDIATAMENTE
+      // INJETAR IMEDIATAMENTE NO CICLO TRABALHANDO COM OS PENDENTES
       const dur = Number((hours / freq).toFixed(2));
       const startOrder = cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) + 1 : 0;
       const newSessions: CycleItem[] = Array.from({ length: freq }, (_, i) => ({
         id: generateId('item'),
         subjectId: newSub.id,
+        subjectName: name,
+        subjectColor: newSub.color,
         cycleId: `cycle-${Date.now()}`,
         duration: dur,
         completed: false,
@@ -223,6 +228,13 @@ const App: React.FC = () => {
     }
     setIsModalOpen(false);
   }, [editingSubject, subjects, cycleItems]);
+
+  const handleDeleteSubject = useCallback(async (id: string) => {
+    if (!confirm("Isso removerá a disciplina do seu ciclo atual, mas não afetará o histórico já salvo. Continuar?")) return;
+    setSubjects(p => p.filter(s => s.id !== id));
+    setCycleItems(p => p.filter(i => i.subjectId !== id));
+    if (session) supabaseService.deleteSubject(id);
+  }, [session]);
 
   if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-brand-blue font-black animate-pulse">CARREGANDO...</div>;
   if (!session) return <Auth onSuccess={setSession} />;
@@ -259,7 +271,7 @@ const App: React.FC = () => {
           <PerformanceRank subjects={subjects} />
           <div className="space-y-4">
              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Disciplinas Ativas</h3>
-             {uniqueSubjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={id => { setSubjects(p => p.filter(sub => sub.id !== id)); }} onEdit={s => { setEditingSubject(s); setIsModalOpen(true); }} />)}
+             {uniqueSubjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={handleDeleteSubject} onEdit={s => { setEditingSubject(s); setIsModalOpen(true); }} />)}
           </div>
         </div>
       </main>
