@@ -98,7 +98,8 @@ const App: React.FC = () => {
         sid: s.id, 
         sname: s.name, 
         scolor: s.color, 
-        dur 
+        dur,
+        url: s.notebookUrl // Herdando o link do cadastro da disciplina
       }));
     });
     
@@ -113,7 +114,7 @@ const App: React.FC = () => {
       duration: p.dur, 
       completed: false, 
       order: lastOrder + 1 + i,
-      sessionUrl: ""
+      sessionUrl: p.url // Definindo o link para as novas sessões
     }));
   }, []);
 
@@ -165,13 +166,20 @@ const App: React.FC = () => {
     setCycleItems(prev => {
       const targetItem = prev.find(i => i.id === id);
       if (!targetItem) return prev;
+
+      // Sincroniza o link com o cadastro principal da disciplina para futuros ciclos
+      setSubjects(sPrev => sPrev.map(s => 
+        s.id === targetItem.subjectId ? { ...s, notebookUrl: url } : s
+      ));
+
+      // Atualiza o link em todas as sessões DESTA disciplina no ciclo atual
       return prev.map(item => 
         item.subjectId === targetItem.subjectId 
           ? { ...item, sessionUrl: url } 
           : item
       );
     });
-  }, []);
+  }, [setSubjects]);
 
   const handleAddSubject = useCallback((e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -181,7 +189,6 @@ const App: React.FC = () => {
     const hours = Math.max(0, Number(fd.get('totalHours')));
     const url = String(fd.get('notebookUrl'));
 
-    // Validação de Duplicidade
     const isDuplicate = subjects.some(s => 
       s.name.toLowerCase() === name.toLowerCase() && 
       (!editingSubject || s.id !== editingSubject.id)
@@ -195,14 +202,14 @@ const App: React.FC = () => {
     if (editingSubject) {
       setSubjects(p => p.map(s => s.id === editingSubject.id ? { ...s, name, totalHours: hours, frequency: freq, notebookUrl: url } : s));
       
-      // Propaga a edição para o Ciclo Atual imediatamente
       const newDuration = Number((hours / freq).toFixed(2));
       setCycleItems(prev => prev.map(item => {
         if (item.subjectId === editingSubject.id) {
           return {
             ...item,
             subjectName: name,
-            duration: newDuration
+            duration: newDuration,
+            sessionUrl: url // Atualiza o link nas sessões atuais também ao editar matéria
           };
         }
         return item;
@@ -231,7 +238,7 @@ const App: React.FC = () => {
         duration: dur,
         completed: false,
         order: startOrder + i,
-        sessionUrl: ""
+        sessionUrl: url // Inicia novas sessões com o link fornecido
       }));
       setCycleItems(prev => [...prev, ...newSessions]);
     }
