@@ -66,7 +66,6 @@ const App: React.FC = () => {
         }
 
         if (cloudItems && cloudItems.length > 0) {
-          // Garante que não misturamos dados locais com nuvem
           setCycleItems(cloudItems);
         }
 
@@ -108,7 +107,7 @@ const App: React.FC = () => {
     localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
   }, [isDarkMode]);
 
-  // Geração de Ciclo com IDs Estáveis e Limpeza
+  // Geração de Ciclo com IDs Estáveis e Sincronização de Dados Prévios
   const generateCycle = useCallback(async (currentSubjects: Subject[], prevItems: CycleItem[] = []) => {
     if (currentSubjects.length === 0) {
       setCycleItems([]);
@@ -118,11 +117,15 @@ const App: React.FC = () => {
       return;
     }
 
-    // Mapeia URLs e desempenhos anteriores para não perder dados ao renovar
+    // Mapeia URLs e desempenhos anteriores para manter consistência ao renovar
     const prevDataMap: Record<string, { url: string, performance?: number }> = {};
     prevItems.forEach(item => {
-      if (!prevDataMap[item.subjectId]) {
-         prevDataMap[item.subjectId] = { url: item.sessionUrl || "", performance: item.performance };
+      // Pega o dado mais recente disponível para aquela disciplina
+      if (item.sessionUrl || item.performance !== undefined) {
+         prevDataMap[item.subjectId] = { 
+           url: item.sessionUrl || prevDataMap[item.subjectId]?.url || "", 
+           performance: item.performance !== undefined ? item.performance : prevDataMap[item.subjectId]?.performance 
+         };
       }
     });
 
@@ -148,7 +151,6 @@ const App: React.FC = () => {
         const persisted = prevDataMap[sId];
 
         newItems.push({
-          // ID FIXO POR POSIÇÃO: Impede duplicidade ao salvar no banco
           id: `item-pos-${i}`, 
           subjectId: sId,
           duration: selected.duration,
@@ -161,7 +163,6 @@ const App: React.FC = () => {
       }
     }
 
-    // 1. Limpa o banco para evitar itens órfãos se o tamanho do ciclo mudou
     if (session) {
       setSyncStatus('syncing');
       try {
@@ -176,8 +177,14 @@ const App: React.FC = () => {
     setCycleItems(newItems);
   }, [session]);
 
+  // ATUALIZAÇÃO AUTOMÁTICA EM MASSA: Quando muda o link de uma, muda de todas as repetições
   const handleUpdateUrl = (itemId: string, url: string) => {
-    setCycleItems(prev => prev.map(i => i.id === itemId ? { ...i, sessionUrl: url } : i));
+    const item = cycleItems.find(i => i.id === itemId);
+    if (!item) return;
+    
+    setCycleItems(prev => prev.map(i => 
+      i.subjectId === item.subjectId ? { ...i, sessionUrl: url } : i
+    ));
   };
 
   const handleUpdatePerformance = (itemId: string, val: number) => {
@@ -193,7 +200,18 @@ const App: React.FC = () => {
     const name = (formData.get('name') as string).trim();
     const totalHours = parseFloat(formData.get('totalHours') as string);
     const frequency = parseInt(formData.get('frequency') as string);
-    const notebookUrl = formData.get('notebookUrl') as string;
+    const notebookUrl = (formData.get('notebookUrl') as string).trim();
+
+    // VALIDAÇÃO DE NOME ÚNICO
+    const isDuplicateName = subjects.some(s => 
+      s.name.toLowerCase() === name.toLowerCase() && 
+      (!editingSubject || s.id !== editingSubject.id)
+    );
+
+    if (isDuplicateName) {
+      alert(`Já existe uma disciplina cadastrada com o nome "${name.toUpperCase()}". Por favor, use um nome diferente.`);
+      return;
+    }
 
     let updated: Subject[];
     if (editingSubject) {
@@ -211,10 +229,9 @@ const App: React.FC = () => {
     }
     setSubjects(updated);
     
-    // Se for uma nova disciplina ou edição crítica, gera o ciclo
     if (!editingSubject) {
       generateCycle(updated, cycleItems);
-    } else if (confirm("Atualizar estrutura do ciclo? Isso resetará o progresso atual para refletir as novas configurações.")) {
+    } else if (confirm("Deseja regenerar o ciclo para aplicar as novas configurações? Isso sincronizará os links existentes.")) {
       generateCycle(updated, cycleItems);
     }
     setIsModalOpen(false);
@@ -230,8 +247,6 @@ const App: React.FC = () => {
 
     const nextSubjects = subjects.filter(s => s.id !== id);
     setSubjects(nextSubjects);
-    
-    // Após deletar uma matéria, precisamos obrigatoriamente regenerar o ciclo para não ter itens inválidos
     generateCycle(nextSubjects, cycleItems);
     
     if (session) {
@@ -366,7 +381,7 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Link do Caderno</label>
+                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Link do Caderno (Fixo)</label>
                    <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} placeholder="https://..." className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-medium outline-none focus:border-[#0066b2] transition-all" />
                 </div>
               </div>

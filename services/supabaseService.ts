@@ -57,11 +57,11 @@ export const supabaseService = {
       return (data || []).map(s => ({
         id: s.id,
         name: s.name,
-        totalHours: Number(s.total_hours),
-        frequency: Number(s.frequency),
+        totalHours: Number(s.total_hours || 0),
+        frequency: Number(s.frequency || 1),
         notebookUrl: s.notebook_url || "",
         masteryPercentage: Number(s.mastery_percentage || 0),
-        color: s.color,
+        color: s.color || "#6366f1",
         topics: s.topics || []
       }));
     } catch (e) {
@@ -79,18 +79,19 @@ export const supabaseService = {
         id: s.id,
         user_id: session.user.id,
         name: s.name,
-        total_hours: s.totalHours,
-        frequency: s.frequency,
-        notebook_url: s.notebookUrl,
-        mastery_percentage: s.masteryPercentage,
+        total_hours: Number(s.totalHours),
+        frequency: Number(s.frequency),
+        notebook_url: s.notebookUrl || "",
+        // CORREÇÃO: Mapeamento explícito para a coluna mastery_percentage
+        mastery_percentage: Number(s.masteryPercentage || 0),
         color: s.color,
-        topics: s.topics
+        topics: s.topics || []
       }));
 
       const { error } = await supabase.from('subjects').upsert(payload, { onConflict: 'id' });
       if (error) throw error;
     } catch (e) {
-      console.error("Erro ao sincronizar disciplinas:", e);
+      console.error("Erro ao sincronizar disciplinas (upsert):", e);
       throw e;
     }
   },
@@ -133,10 +134,10 @@ export const supabaseService = {
         id: item.id,
         user_id: session.user.id,
         subject_id: item.subjectId,
-        duration: item.duration,
-        completed: item.completed,
-        order: item.order,
-        performance: item.performance || null,
+        duration: Number(item.duration),
+        completed: Boolean(item.completed),
+        order: Number(item.order),
+        performance: item.performance ? Number(item.performance) : null,
         session_url: item.sessionUrl || null,
         completed_at: item.completedAt || null
       }));
