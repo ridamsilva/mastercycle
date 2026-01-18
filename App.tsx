@@ -37,6 +37,7 @@ const App: React.FC = () => {
   const isInitialLoadRef = useRef(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Auth State
   useEffect(() => {
     supabaseService.getSession().then(session => {
       setSession(session);
@@ -50,6 +51,7 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Hydration from Cloud
   useEffect(() => {
     if (!session || isInitialLoadRef.current) return;
 
@@ -61,19 +63,17 @@ const App: React.FC = () => {
 
         if (cloudSubjects && cloudSubjects.length > 0) {
           setSubjects(cloudSubjects);
-        } else if (subjects.length > 0) {
-          await supabaseService.upsertSubjects(subjects);
         }
 
         if (cloudItems && cloudItems.length > 0) {
+          // Garante que não misturamos dados locais com nuvem
           setCycleItems(cloudItems);
-        } else if (cycleItems.length > 0) {
-          await supabaseService.upsertCycleItems(cycleItems);
         }
 
         setSyncStatus('success');
         isInitialLoadRef.current = true;
       } catch (e) {
+        console.error("Erro na hidratação:", e);
         setSyncStatus('error');
       }
     };
@@ -81,6 +81,7 @@ const App: React.FC = () => {
     hydrate();
   }, [session]);
 
+  // Autosave to Cloud
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_KEY_SUBJECTS, JSON.stringify(subjects));
     localStorage.setItem(LOCAL_STORAGE_KEY_CYCLE, JSON.stringify(cycleItems));
@@ -107,12 +108,17 @@ const App: React.FC = () => {
     localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
   }, [isDarkMode]);
 
-  const generateCycle = useCallback((currentSubjects: Subject[], prevItems: CycleItem[] = []) => {
+  // Geração de Ciclo com IDs Estáveis e Limpeza
+  const generateCycle = useCallback(async (currentSubjects: Subject[], prevItems: CycleItem[] = []) => {
     if (currentSubjects.length === 0) {
       setCycleItems([]);
+      if (session) {
+        await supabase.from('cycle_items').delete().eq('user_id', session.user.id);
+      }
       return;
     }
 
+    // Mapeia URLs e desempenhos anteriores para não perder dados ao renovar
     const prevDataMap: Record<string, { url: string, performance?: number }> = {};
     prevItems.forEach(item => {
       if (!prevDataMap[item.subjectId]) {
@@ -142,7 +148,8 @@ const App: React.FC = () => {
         const persisted = prevDataMap[sId];
 
         newItems.push({
-          id: `item-${sId}-${Date.now()}-${i}`,
+          // ID FIXO POR POSIÇÃO: Impede duplicidade ao salvar no banco
+          id: `item-pos-${i}`, 
           subjectId: sId,
           duration: selected.duration,
           completed: false,
@@ -153,19 +160,30 @@ const App: React.FC = () => {
         selected.remaining--;
       }
     }
+
+    // 1. Limpa o banco para evitar itens órfãos se o tamanho do ciclo mudou
+    if (session) {
+      setSyncStatus('syncing');
+      try {
+        await supabase.from('cycle_items').delete().eq('user_id', session.user.id);
+        await supabaseService.upsertCycleItems(newItems);
+        setSyncStatus('success');
+      } catch (err) {
+        console.error("Erro ao limpar ciclo antigo:", err);
+      }
+    }
+
     setCycleItems(newItems);
-  }, []);
+  }, [session]);
 
   const handleUpdateUrl = (itemId: string, url: string) => {
-    const item = cycleItems.find(i => i.id === itemId);
-    if (!item) return;
-    setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, sessionUrl: url } : i));
+    setCycleItems(prev => prev.map(i => i.id === itemId ? { ...i, sessionUrl: url } : i));
   };
 
   const handleUpdatePerformance = (itemId: string, val: number) => {
     const item = cycleItems.find(i => i.id === itemId);
     if (!item) return;
-    setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, performance: val } : i));
+    setCycleItems(prev => prev.map(i => i.id === itemId ? { ...i, performance: val } : i));
     setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, masteryPercentage: val } : s));
   };
 
@@ -193,9 +211,10 @@ const App: React.FC = () => {
     }
     setSubjects(updated);
     
+    // Se for uma nova disciplina ou edição crítica, gera o ciclo
     if (!editingSubject) {
       generateCycle(updated, cycleItems);
-    } else if (confirm("Atualizar fluxo mantendo sincronia de dados?")) {
+    } else if (confirm("Atualizar estrutura do ciclo? Isso resetará o progresso atual para refletir as novas configurações.")) {
       generateCycle(updated, cycleItems);
     }
     setIsModalOpen(false);
@@ -205,28 +224,24 @@ const App: React.FC = () => {
     const subjectToDelete = subjects.find(s => s.id === id);
     if (!subjectToDelete) return;
 
-    if (!confirm(`Excluir "${subjectToDelete.name.toUpperCase()}" permanentemente do seu plano?`)) return;
+    if (!confirm(`Excluir "${subjectToDelete.name.toUpperCase()}" permanentemente? Isso removerá a matéria do seu ciclo atual.`)) return;
     
-    // 1. Limpa qualquer tentativa de sincronização pendente
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
 
-    // 2. Remove do estado local IMEDIATAMENTE (UI atualiza na hora)
     const nextSubjects = subjects.filter(s => s.id !== id);
-    const nextCycleItems = cycleItems.filter(item => item.subjectId !== id);
-    
     setSubjects(nextSubjects);
-    setCycleItems(nextCycleItems);
     
-    // 3. Remove do Banco de Dados explicitamente
+    // Após deletar uma matéria, precisamos obrigatoriamente regenerar o ciclo para não ter itens inválidos
+    generateCycle(nextSubjects, cycleItems);
+    
     if (session) {
       setSyncStatus('syncing');
       try {
         await supabaseService.deleteSubject(id);
         setSyncStatus('success');
       } catch (err) {
-        console.error("Falha ao remover do banco de dados:", err);
+        console.error("Erro na exclusão:", err);
         setSyncStatus('error');
-        // Opcional: Recarregar dados se falhar para manter consistência
       }
     }
     
@@ -234,7 +249,7 @@ const App: React.FC = () => {
     setEditingSubject(null);
   };
 
-  if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-[#0066b2] font-black animate-pulse uppercase tracking-[0.5em]">Carregando MasterCycle...</div>;
+  if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-[#0066b2] font-black animate-pulse uppercase tracking-[0.5em]">Sincronizando...</div>;
   if (!session) return <Auth onSuccess={setSession} />;
 
   return (
