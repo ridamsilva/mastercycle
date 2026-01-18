@@ -17,15 +17,8 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  const [subjects, setSubjects] = useState<Subject[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY_SUBJECTS);
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const [cycleItems, setCycleItems] = useState<CycleItem[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY_CYCLE);
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [cycleItems, setCycleItems] = useState<CycleItem[]>([]);
 
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('mastercycle_darkmode') === 'true');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,21 +30,33 @@ const App: React.FC = () => {
   const isInitialLoadRef = useRef(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auth State
+  // Auth State Management
   useEffect(() => {
     supabaseService.getSession().then(session => {
       setSession(session);
       setIsCheckingAuth(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      
+      // Se deslogou, limpa TUDO para evitar contaminação entre usuários
+      if (event === 'SIGNED_OUT' || !session) {
+        setSubjects([]);
+        setCycleItems([]);
+        localStorage.removeItem(LOCAL_STORAGE_KEY_SUBJECTS);
+        localStorage.removeItem(LOCAL_STORAGE_KEY_CYCLE);
+        isInitialLoadRef.current = false;
+      } else {
+        // Se trocou de usuário, permite nova hidratação
+        isInitialLoadRef.current = false;
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Hydration from Cloud
+  // Hydration from Cloud or Local (Scoped to session)
   useEffect(() => {
     if (!session || isInitialLoadRef.current) return;
 
@@ -61,12 +66,20 @@ const App: React.FC = () => {
         const cloudSubjects = await supabaseService.fetchSubjects();
         const cloudItems = await supabaseService.fetchCycleItems();
 
+        // Se o usuário tem dados na nuvem, usa eles
         if (cloudSubjects && cloudSubjects.length > 0) {
           setSubjects(cloudSubjects);
+        } else {
+          // Se não tem na nuvem, verifica se há algo local MAS reseta se o usuário mudou
+          const savedSubjects = localStorage.getItem(LOCAL_STORAGE_KEY_SUBJECTS);
+          setSubjects(savedSubjects ? JSON.parse(savedSubjects) : []);
         }
 
         if (cloudItems && cloudItems.length > 0) {
           setCycleItems(cloudItems);
+        } else {
+          const savedItems = localStorage.getItem(LOCAL_STORAGE_KEY_CYCLE);
+          setCycleItems(savedItems ? JSON.parse(savedItems) : []);
         }
 
         setSyncStatus('success');
@@ -80,12 +93,14 @@ const App: React.FC = () => {
     hydrate();
   }, [session]);
 
-  // Autosave to Cloud
+  // Autosave to Cloud (only after initial load to prevent uploading empty state over existing cloud data)
   useEffect(() => {
+    if (!isInitialLoadRef.current) return;
+
     localStorage.setItem(LOCAL_STORAGE_KEY_SUBJECTS, JSON.stringify(subjects));
     localStorage.setItem(LOCAL_STORAGE_KEY_CYCLE, JSON.stringify(cycleItems));
 
-    if (session && isInitialLoadRef.current) {
+    if (session) {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       
       syncTimerRef.current = setTimeout(async () => {
@@ -107,7 +122,6 @@ const App: React.FC = () => {
     localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
   }, [isDarkMode]);
 
-  // Geração de Ciclo com IDs Estáveis e Sincronização de Dados Prévios
   const generateCycle = useCallback(async (currentSubjects: Subject[], prevItems: CycleItem[] = []) => {
     if (currentSubjects.length === 0) {
       setCycleItems([]);
@@ -117,10 +131,8 @@ const App: React.FC = () => {
       return;
     }
 
-    // Mapeia URLs e desempenhos anteriores para manter consistência ao renovar
     const prevDataMap: Record<string, { url: string, performance?: number }> = {};
     prevItems.forEach(item => {
-      // Pega o dado mais recente disponível para aquela disciplina
       if (item.sessionUrl || item.performance !== undefined) {
          prevDataMap[item.subjectId] = { 
            url: item.sessionUrl || prevDataMap[item.subjectId]?.url || "", 
@@ -151,7 +163,7 @@ const App: React.FC = () => {
         const persisted = prevDataMap[sId];
 
         newItems.push({
-          id: `item-pos-${i}`, 
+          id: `item-pos-${i}-${Math.random().toString(36).substr(2, 5)}`, 
           subjectId: sId,
           duration: selected.duration,
           completed: false,
@@ -163,28 +175,13 @@ const App: React.FC = () => {
       }
     }
 
-    if (session) {
-      setSyncStatus('syncing');
-      try {
-        await supabase.from('cycle_items').delete().eq('user_id', session.user.id);
-        await supabaseService.upsertCycleItems(newItems);
-        setSyncStatus('success');
-      } catch (err) {
-        console.error("Erro ao limpar ciclo antigo:", err);
-      }
-    }
-
     setCycleItems(newItems);
   }, [session]);
 
-  // ATUALIZAÇÃO AUTOMÁTICA EM MASSA: Quando muda o link de uma, muda de todas as repetições
   const handleUpdateUrl = (itemId: string, url: string) => {
     const item = cycleItems.find(i => i.id === itemId);
     if (!item) return;
-    
-    setCycleItems(prev => prev.map(i => 
-      i.subjectId === item.subjectId ? { ...i, sessionUrl: url } : i
-    ));
+    setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, sessionUrl: url } : i));
   };
 
   const handleUpdatePerformance = (itemId: string, val: number) => {
@@ -202,14 +199,13 @@ const App: React.FC = () => {
     const frequency = parseInt(formData.get('frequency') as string);
     const notebookUrl = (formData.get('notebookUrl') as string).trim();
 
-    // VALIDAÇÃO DE NOME ÚNICO
     const isDuplicateName = subjects.some(s => 
       s.name.toLowerCase() === name.toLowerCase() && 
       (!editingSubject || s.id !== editingSubject.id)
     );
 
     if (isDuplicateName) {
-      alert(`Já existe uma disciplina cadastrada com o nome "${name.toUpperCase()}". Por favor, use um nome diferente.`);
+      alert(`Já existe uma disciplina cadastrada com o nome "${name.toUpperCase()}".`);
       return;
     }
 
@@ -231,8 +227,10 @@ const App: React.FC = () => {
     
     if (!editingSubject) {
       generateCycle(updated, cycleItems);
-    } else if (confirm("Deseja regenerar o ciclo para aplicar as novas configurações? Isso sincronizará os links existentes.")) {
-      generateCycle(updated, cycleItems);
+    } else {
+      if (confirm("Atualizar ciclo para refletir mudanças?")) {
+        generateCycle(updated, cycleItems);
+      }
     }
     setIsModalOpen(false);
   };
@@ -241,10 +239,8 @@ const App: React.FC = () => {
     const subjectToDelete = subjects.find(s => s.id === id);
     if (!subjectToDelete) return;
 
-    if (!confirm(`Excluir "${subjectToDelete.name.toUpperCase()}" permanentemente? Isso removerá a matéria do seu ciclo atual.`)) return;
+    if (!confirm(`Excluir "${subjectToDelete.name.toUpperCase()}"?`)) return;
     
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-
     const nextSubjects = subjects.filter(s => s.id !== id);
     setSubjects(nextSubjects);
     generateCycle(nextSubjects, cycleItems);
@@ -255,16 +251,14 @@ const App: React.FC = () => {
         await supabaseService.deleteSubject(id);
         setSyncStatus('success');
       } catch (err) {
-        console.error("Erro na exclusão:", err);
         setSyncStatus('error');
       }
     }
-    
     setIsModalOpen(false);
     setEditingSubject(null);
   };
 
-  if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-[#0066b2] font-black animate-pulse uppercase tracking-[0.5em]">Sincronizando...</div>;
+  if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-brand-blue font-black animate-pulse uppercase tracking-[0.5em]">MasterCycle...</div>;
   if (!session) return <Auth onSuccess={setSession} />;
 
   return (
@@ -299,7 +293,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-1.5 mt-2">
               <div className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
               <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">
-                {syncStatus === 'syncing' ? 'Sincronizando' : syncStatus === 'error' ? 'Erro de Sinc' : 'Nuvem Conectada'}
+                {syncStatus === 'syncing' ? 'Sincronizando' : syncStatus === 'error' ? 'Erro' : 'Cloud On'}
               </span>
             </div>
           </div>
@@ -312,8 +306,8 @@ const App: React.FC = () => {
           <button onClick={() => setIsStatsOpen(true)} className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-[#0066b2] transition-all hover:scale-105">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" /></svg>
           </button>
-          <button onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} className="hidden sm:block px-6 py-3 bg-[#0066b2] text-white text-[10px] font-black rounded-2xl uppercase tracking-[0.2em] shadow-lg hover:bg-[#004a80] transition-all">
-            Nova Disciplina
+          <button onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} className="hidden sm:block px-6 py-3 bg-[#0066b2] text-white text-[10px] font-black rounded-2xl uppercase tracking-[0.2em] shadow-lg hover:bg-brand-darkBlue transition-all">
+            Nova Matéria
           </button>
         </div>
       </header>
@@ -324,8 +318,8 @@ const App: React.FC = () => {
           <PerformanceRank subjects={subjects} />
           <div className="space-y-4">
              <div className="flex items-center justify-between">
-                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Disciplinas</h3>
-                <button onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} className="sm:hidden text-[10px] font-black text-[#0066b2] uppercase">Adicionar</button>
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Suas Disciplinas</h3>
+                <button onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} className="sm:hidden text-[10px] font-black text-[#0066b2] uppercase">Add</button>
              </div>
              {subjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={deleteSubject} onEdit={(sub) => { setEditingSubject(sub); setMasteryValue(sub.masteryPercentage); setIsModalOpen(true); }} />)}
           </div>
@@ -360,46 +354,34 @@ const App: React.FC = () => {
             <form onSubmit={handleAddOrEditSubject} className="space-y-8">
               <div className="space-y-2 text-center">
                 <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">{editingSubject ? 'Editar' : 'Nova'} Disciplina</h2>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Configuração do Ciclo</p>
               </div>
-
               <div className="space-y-5">
                 <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nome da Matéria</label>
-                   <input name="name" defaultValue={editingSubject?.name} required placeholder="Ex: Matemática" className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
+                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nome</label>
+                   <input name="name" defaultValue={editingSubject?.name} required className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
                 </div>
-                
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Horas Totais</label>
-                    <input name="totalHours" type="number" step="0.5" min="0.5" defaultValue={editingSubject?.totalHours || 2} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
+                    <input name="totalHours" type="number" step="0.5" defaultValue={editingSubject?.totalHours || 2} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Vezes no Ciclo</label>
-                    <input name="frequency" type="number" min="1" max="10" defaultValue={editingSubject?.frequency || 1} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Repetições</label>
+                    <input name="frequency" type="number" min="1" defaultValue={editingSubject?.frequency || 1} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
                   </div>
                 </div>
-
                 <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Link do Caderno (Fixo)</label>
-                   <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} placeholder="https://..." className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-medium outline-none focus:border-[#0066b2] transition-all" />
+                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Caderno Digital (URL)</label>
+                   <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} placeholder="Opcional" className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-medium outline-none focus:border-[#0066b2] transition-all" />
                 </div>
               </div>
-
               <div className="flex flex-col gap-4">
                 <div className="flex gap-4">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-5 rounded-2xl bg-slate-100 font-black dark:bg-slate-800 text-slate-500 uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
-                  <button type="submit" className="flex-1 p-5 rounded-2xl bg-[#0066b2] text-white font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100 dark:shadow-none hover:bg-[#004a80] transition-all">Salvar</button>
+                  <button type="submit" className="flex-1 p-5 rounded-2xl bg-[#0066b2] text-white font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100 dark:shadow-none hover:bg-brand-darkBlue transition-all">Salvar</button>
                 </div>
-                
                 {editingSubject && (
-                  <button 
-                    type="button" 
-                    onClick={() => deleteSubject(editingSubject.id)}
-                    className="w-full p-4 rounded-2xl text-rose-500 font-black uppercase text-[9px] tracking-[0.2em] border border-rose-100 dark:border-rose-900/40 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all"
-                  >
-                    Excluir Disciplina do Plano
-                  </button>
+                  <button type="button" onClick={() => deleteSubject(editingSubject.id)} className="w-full p-4 rounded-2xl text-rose-500 font-black uppercase text-[9px] tracking-[0.2em] border border-rose-100 dark:border-rose-900/40 hover:bg-rose-50 transition-all">Excluir Matéria</button>
                 )}
               </div>
             </form>

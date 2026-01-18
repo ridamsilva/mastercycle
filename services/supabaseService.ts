@@ -82,7 +82,6 @@ export const supabaseService = {
         total_hours: Number(s.totalHours),
         frequency: Number(s.frequency),
         notebook_url: s.notebookUrl || "",
-        // CORREÇÃO: Mapeamento explícito para a coluna mastery_percentage
         mastery_percentage: Number(s.masteryPercentage || 0),
         color: s.color,
         topics: s.topics || []
@@ -115,7 +114,7 @@ export const supabaseService = {
         duration: Number(item.duration),
         completed: Boolean(item.completed),
         order: Number(item.order),
-        performance: item.performance ? Number(item.performance) : undefined,
+        performance: (item.performance !== null && item.performance !== undefined) ? Number(item.performance) : undefined,
         sessionUrl: item.session_url || "",
         completedAt: item.completed_at ? Number(item.completed_at) : undefined
       }));
@@ -137,9 +136,9 @@ export const supabaseService = {
         duration: Number(item.duration),
         completed: Boolean(item.completed),
         order: Number(item.order),
-        performance: item.performance ? Number(item.performance) : null,
+        performance: (item.performance !== undefined && item.performance !== null) ? Number(item.performance) : null,
         session_url: item.sessionUrl || null,
-        completed_at: item.completedAt || null
+        completed_at: item.completedAt ? Number(item.completedAt) : null
       }));
 
       const { error } = await supabase.from('cycle_items').upsert(payload, { onConflict: 'id' });
@@ -154,29 +153,22 @@ export const supabaseService = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
     
-    // Deleta os itens do ciclo vinculados primeiro para evitar conflitos de Foreign Key
+    // Deleta os itens do ciclo vinculados primeiro
     const { error: cycleError } = await supabase
       .from('cycle_items')
       .delete()
       .eq('subject_id', id)
       .eq('user_id', session.user.id);
     
-    if (cycleError) {
-      console.error("Erro ao deletar itens do ciclo:", cycleError);
-      throw cycleError;
-    }
+    if (cycleError) throw cycleError;
     
-    // Agora deleta a disciplina principal
     const { error: subjectError } = await supabase
       .from('subjects')
       .delete()
       .eq('id', id)
       .eq('user_id', session.user.id);
 
-    if (subjectError) {
-      console.error("Erro ao deletar disciplina:", subjectError);
-      throw subjectError;
-    }
+    if (subjectError) throw subjectError;
 
     return true;
   }
