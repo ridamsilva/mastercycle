@@ -39,8 +39,6 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      
-      // Se deslogou, limpa TUDO para evitar contaminação entre usuários
       if (event === 'SIGNED_OUT' || !session) {
         setSubjects([]);
         setCycleItems([]);
@@ -48,7 +46,6 @@ const App: React.FC = () => {
         localStorage.removeItem(LOCAL_STORAGE_KEY_CYCLE);
         isInitialLoadRef.current = false;
       } else {
-        // Se trocou de usuário, permite nova hidratação
         isInitialLoadRef.current = false;
       }
     });
@@ -56,7 +53,7 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Hydration from Cloud or Local (Scoped to session)
+  // Hydration logic
   useEffect(() => {
     if (!session || isInitialLoadRef.current) return;
 
@@ -66,26 +63,23 @@ const App: React.FC = () => {
         const cloudSubjects = await supabaseService.fetchSubjects();
         const cloudItems = await supabaseService.fetchCycleItems();
 
-        // Se o usuário tem dados na nuvem, usa eles
         if (cloudSubjects && cloudSubjects.length > 0) {
           setSubjects(cloudSubjects);
         } else {
-          // Se não tem na nuvem, verifica se há algo local MAS reseta se o usuário mudou
           const savedSubjects = localStorage.getItem(LOCAL_STORAGE_KEY_SUBJECTS);
-          setSubjects(savedSubjects ? JSON.parse(savedSubjects) : []);
+          if (savedSubjects) setSubjects(JSON.parse(savedSubjects));
         }
 
         if (cloudItems && cloudItems.length > 0) {
           setCycleItems(cloudItems);
         } else {
           const savedItems = localStorage.getItem(LOCAL_STORAGE_KEY_CYCLE);
-          setCycleItems(savedItems ? JSON.parse(savedItems) : []);
+          if (savedItems) setCycleItems(JSON.parse(savedItems));
         }
 
         setSyncStatus('success');
         isInitialLoadRef.current = true;
       } catch (e) {
-        console.error("Erro na hidratação:", e);
         setSyncStatus('error');
       }
     };
@@ -93,27 +87,25 @@ const App: React.FC = () => {
     hydrate();
   }, [session]);
 
-  // Autosave to Cloud (only after initial load to prevent uploading empty state over existing cloud data)
+  // Enhanced Autosave
   useEffect(() => {
-    if (!isInitialLoadRef.current) return;
+    if (!isInitialLoadRef.current || !session) return;
 
     localStorage.setItem(LOCAL_STORAGE_KEY_SUBJECTS, JSON.stringify(subjects));
     localStorage.setItem(LOCAL_STORAGE_KEY_CYCLE, JSON.stringify(cycleItems));
 
-    if (session) {
-      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-      
-      syncTimerRef.current = setTimeout(async () => {
-        setSyncStatus('syncing');
-        try {
-          await supabaseService.upsertSubjects(subjects);
-          await supabaseService.upsertCycleItems(cycleItems);
-          setSyncStatus('success');
-        } catch (e) {
-          setSyncStatus('error');
-        }
-      }, 3000);
-    }
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    
+    syncTimerRef.current = setTimeout(async () => {
+      setSyncStatus('syncing');
+      try {
+        await supabaseService.upsertSubjects(subjects);
+        await supabaseService.upsertCycleItems(cycleItems);
+        setSyncStatus('success');
+      } catch (e) {
+        setSyncStatus('error');
+      }
+    }, 2000);
   }, [subjects, cycleItems, session]);
 
   useEffect(() => {
@@ -122,26 +114,23 @@ const App: React.FC = () => {
     localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
   }, [isDarkMode]);
 
-  const generateCycle = useCallback(async (currentSubjects: Subject[], prevItems: CycleItem[] = []) => {
+  // GERAÇÃO DE CICLO INTELIGENTE COM PRESERVAÇÃO DE ESTADO
+  const generateCycle = useCallback(async (currentSubjects: Subject[], prevItems: CycleItem[] = [], resetCompleted = false) => {
     if (currentSubjects.length === 0) {
       setCycleItems([]);
-      if (session) {
-        await supabase.from('cycle_items').delete().eq('user_id', session.user.id);
-      }
       return;
     }
 
-    const prevDataMap: Record<string, { url: string, performance?: number }> = {};
+    // Agrupa itens anteriores por subjectId para preservar estado por ocorrência
+    const prevItemsMap: Record<string, CycleItem[]> = {};
     prevItems.forEach(item => {
-      if (item.sessionUrl || item.performance !== undefined) {
-         prevDataMap[item.subjectId] = { 
-           url: item.sessionUrl || prevDataMap[item.subjectId]?.url || "", 
-           performance: item.performance !== undefined ? item.performance : prevDataMap[item.subjectId]?.performance 
-         };
-      }
+      if (!prevItemsMap[item.subjectId]) prevItemsMap[item.subjectId] = [];
+      prevItemsMap[item.subjectId].push(item);
     });
 
+    const subjectOccurrenceCounters: Record<string, number> = {};
     const newItems: CycleItem[] = [];
+    
     const tempPool = currentSubjects.map(s => ({
       subjectId: s.id,
       remaining: s.frequency,
@@ -160,17 +149,24 @@ const App: React.FC = () => {
 
       if (selected) {
         const sId = selected.subjectId;
-        const persisted = prevDataMap[sId];
+        const count = subjectOccurrenceCounters[sId] || 0;
+        const existing = prevItemsMap[sId]?.[count];
+        const subConfig = currentSubjects.find(s => s.id === sId);
 
         newItems.push({
-          id: `item-pos-${i}-${Math.random().toString(36).substr(2, 5)}`, 
+          // ID DETERMINÍSTICO PARA EVITAR DUPLICATAS
+          id: `slot-${i}`, 
           subjectId: sId,
           duration: selected.duration,
-          completed: false,
+          completed: resetCompleted ? false : (existing?.completed || false),
           order: i,
-          sessionUrl: persisted?.url || "",
-          performance: persisted?.performance
+          // Prefere o link do bloco anterior, senão o link fixo da matéria
+          sessionUrl: existing?.sessionUrl || subConfig?.notebookUrl || "",
+          performance: resetCompleted ? undefined : existing?.performance,
+          completedAt: resetCompleted ? undefined : existing?.completedAt
         });
+        
+        subjectOccurrenceCounters[sId] = count + 1;
         selected.remaining--;
       }
     }
@@ -181,7 +177,12 @@ const App: React.FC = () => {
   const handleUpdateUrl = (itemId: string, url: string) => {
     const item = cycleItems.find(i => i.id === itemId);
     if (!item) return;
+    
+    // Atualiza no Ciclo (em todos os blocos da mesma matéria)
     setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, sessionUrl: url } : i));
+    
+    // Atualiza na configuração base da Subject para persistência futura
+    setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, notebookUrl: url } : s));
   };
 
   const handleUpdatePerformance = (itemId: string, val: number) => {
@@ -205,7 +206,7 @@ const App: React.FC = () => {
     );
 
     if (isDuplicateName) {
-      alert(`Já existe uma disciplina cadastrada com o nome "${name.toUpperCase()}".`);
+      alert(`Já existe uma disciplina chamada "${name.toUpperCase()}".`);
       return;
     }
 
@@ -216,7 +217,7 @@ const App: React.FC = () => {
       } : s);
     } else {
       const newSubject: Subject = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: `sub-${Date.now()}`,
         name, totalHours, frequency, notebookUrl, masteryPercentage: masteryValue,
         color: COLORS[subjects.length % COLORS.length],
         topics: []
@@ -225,20 +226,14 @@ const App: React.FC = () => {
     }
     setSubjects(updated);
     
-    if (!editingSubject) {
-      generateCycle(updated, cycleItems);
-    } else {
-      if (confirm("Atualizar ciclo para refletir mudanças?")) {
-        generateCycle(updated, cycleItems);
-      }
-    }
+    // Gera novo ciclo preservando marcações anteriores
+    generateCycle(updated, cycleItems);
     setIsModalOpen(false);
   };
 
   const deleteSubject = async (id: string) => {
     const subjectToDelete = subjects.find(s => s.id === id);
     if (!subjectToDelete) return;
-
     if (!confirm(`Excluir "${subjectToDelete.name.toUpperCase()}"?`)) return;
     
     const nextSubjects = subjects.filter(s => s.id !== id);
@@ -258,7 +253,7 @@ const App: React.FC = () => {
     setEditingSubject(null);
   };
 
-  if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-brand-blue font-black animate-pulse uppercase tracking-[0.5em]">MasterCycle...</div>;
+  if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-brand-blue font-black animate-pulse uppercase tracking-[0.5em]">Carregando...</div>;
   if (!session) return <Auth onSuccess={setSession} />;
 
   return (
@@ -293,7 +288,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-1.5 mt-2">
               <div className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
               <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">
-                {syncStatus === 'syncing' ? 'Sincronizando' : syncStatus === 'error' ? 'Erro' : 'Cloud On'}
+                {syncStatus === 'syncing' ? 'Salvando' : syncStatus === 'error' ? 'Erro de Sinc' : 'Nuvem OK'}
               </span>
             </div>
           </div>
@@ -319,7 +314,6 @@ const App: React.FC = () => {
           <div className="space-y-4">
              <div className="flex items-center justify-between">
                 <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Suas Disciplinas</h3>
-                <button onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} className="sm:hidden text-[10px] font-black text-[#0066b2] uppercase">Add</button>
              </div>
              {subjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={deleteSubject} onEdit={(sub) => { setEditingSubject(sub); setMasteryValue(sub.masteryPercentage); setIsModalOpen(true); }} />)}
           </div>
@@ -338,9 +332,9 @@ const App: React.FC = () => {
               const ti = list.findIndex(i => i.id === t);
               const [item] = list.splice(di, 1);
               list.splice(ti, 0, item);
-              setCycleItems(list.map((i, idx) => ({ ...i, order: idx })));
+              setCycleItems(list.map((i, idx) => ({ ...i, order: idx, id: `slot-${idx}` })));
             }}
-            onAppendCycle={() => generateCycle(subjects, cycleItems)}
+            onAppendCycle={() => generateCycle(subjects, cycleItems, true)}
             onUpdateSubjectTopics={(sid, topics) => setSubjects(prev => prev.map(s => s.id === sid ? { ...s, topics } : s))}
           />
         </div>
@@ -371,14 +365,14 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Caderno Digital (URL)</label>
-                   <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} placeholder="Opcional" className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-medium outline-none focus:border-[#0066b2] transition-all" />
+                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Link Base (Opcional)</label>
+                   <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-medium outline-none focus:border-[#0066b2] transition-all" />
                 </div>
               </div>
               <div className="flex flex-col gap-4">
                 <div className="flex gap-4">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-5 rounded-2xl bg-slate-100 font-black dark:bg-slate-800 text-slate-500 uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
-                  <button type="submit" className="flex-1 p-5 rounded-2xl bg-[#0066b2] text-white font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100 dark:shadow-none hover:bg-brand-darkBlue transition-all">Salvar</button>
+                  <button type="submit" className="flex-1 p-5 rounded-2xl bg-[#0066b2] text-white font-black uppercase text-[10px] tracking-widest hover:bg-brand-darkBlue transition-all">Salvar</button>
                 </div>
                 {editingSubject && (
                   <button type="button" onClick={() => deleteSubject(editingSubject.id)} className="w-full p-4 rounded-2xl text-rose-500 font-black uppercase text-[9px] tracking-[0.2em] border border-rose-100 dark:border-rose-900/40 hover:bg-rose-50 transition-all">Excluir Matéria</button>
