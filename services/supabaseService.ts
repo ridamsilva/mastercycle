@@ -1,9 +1,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_PUBLIC_ANON_KEY } from '../constants.tsx';
-import { Subject, CycleItem } from '../types.ts';
+import { Subject, CycleItem, CycleHistoryEntry } from '../types.ts';
 
-// Inicializa o cliente com a chave pública
 export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLIC_ANON_KEY);
 
 export const supabaseService = {
@@ -30,30 +29,27 @@ export const supabaseService = {
     });
   },
 
-  async updatePassword(newPassword: string) {
+  async updatePassword(password: string) {
     return await supabase.auth.updateUser({
-      password: newPassword
+      password: password
     });
   },
 
   async deleteAccount() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await this.signOut();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    await supabase.from('subjects').delete().eq('user_id', session.user.id);
+    await supabase.from('cycle_items').delete().eq('user_id', session.user.id);
+    await supabase.from('study_history').delete().eq('user_id', session.user.id);
+    return await this.signOut();
   },
 
   async fetchSubjects(): Promise<Subject[] | null> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return null;
-
-      const { data, error } = await supabase
-        .from('subjects')
-        .select('*')
-        .eq('user_id', session.user.id);
-      
+      const { data, error } = await supabase.from('subjects').select('*').eq('user_id', session.user.id);
       if (error) throw error;
-      
       return (data || []).map(s => ({
         id: s.id,
         name: s.name,
@@ -64,17 +60,13 @@ export const supabaseService = {
         color: s.color || "#6366f1",
         topics: s.topics || []
       }));
-    } catch (e) {
-      console.error("Falha ao carregar dados:", e);
-      return null;
-    }
+    } catch { return null; }
   },
 
   async upsertSubjects(subjects: Subject[]) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
-
       const payload = subjects.map(s => ({
         id: s.id,
         user_id: session.user.id,
@@ -86,49 +78,33 @@ export const supabaseService = {
         color: s.color,
         topics: s.topics || []
       }));
-
-      const { error } = await supabase.from('subjects').upsert(payload, { onConflict: 'id' });
-      if (error) throw error;
-    } catch (e) {
-      console.error("Erro ao sincronizar disciplinas (upsert):", e);
-      throw e;
-    }
+      await supabase.from('subjects').upsert(payload, { onConflict: 'id' });
+    } catch {}
   },
 
   async fetchCycleItems(): Promise<CycleItem[] | null> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return null;
-
-      const { data, error } = await supabase
-        .from('cycle_items')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('order', { ascending: true });
-
+      const { data, error } = await supabase.from('cycle_items').select('*').eq('user_id', session.user.id).order('order', { ascending: true });
       if (error) throw error;
-
       return (data || []).map(item => ({
         id: item.id,
         subjectId: item.subject_id,
         duration: Number(item.duration),
         completed: Boolean(item.completed),
         order: Number(item.order),
-        performance: (item.performance !== null && item.performance !== undefined) ? Number(item.performance) : undefined,
+        performance: item.performance != null ? Number(item.performance) : undefined,
         sessionUrl: item.session_url || "",
         completedAt: item.completed_at ? Number(item.completed_at) : undefined
       }));
-    } catch (e) {
-      console.error("Erro ao buscar ciclo:", e);
-      return null;
-    }
+    } catch { return null; }
   },
 
   async upsertCycleItems(items: CycleItem[]) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
-
       const payload = items.map(item => ({
         id: item.id,
         user_id: session.user.id,
@@ -136,40 +112,52 @@ export const supabaseService = {
         duration: Number(item.duration),
         completed: Boolean(item.completed),
         order: Number(item.order),
-        performance: (item.performance !== undefined && item.performance !== null) ? Number(item.performance) : null,
+        performance: item.performance != null ? Number(item.performance) : null,
         session_url: item.sessionUrl || null,
         completed_at: item.completedAt ? Number(item.completedAt) : null
       }));
+      await supabase.from('cycle_items').upsert(payload, { onConflict: 'id' });
+    } catch {}
+  },
 
-      const { error } = await supabase.from('cycle_items').upsert(payload, { onConflict: 'id' });
+  async fetchHistory(): Promise<CycleHistoryEntry[] | null> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return null;
+      const { data, error } = await supabase.from('study_history').select('*').eq('user_id', session.user.id).order('completed_at', { ascending: false });
       if (error) throw error;
-    } catch (e) {
-      console.error("Erro ao salvar progresso:", e);
-      throw e;
-    }
+      return (data || []).map(h => ({
+        id: h.id,
+        completedAt: Number(h.completed_at),
+        totalItems: Number(h.total_items),
+        avgPerformance: Number(h.avg_performance),
+        totalHours: Number(h.total_hours),
+        cycleSnapshot: h.cycle_snapshot || []
+      }));
+    } catch { return null; }
+  },
+
+  async saveHistoryEntry(entry: CycleHistoryEntry) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      await supabase.from('study_history').insert({
+        id: entry.id,
+        user_id: session.user.id,
+        completed_at: Number(entry.completedAt),
+        total_items: Number(entry.totalItems),
+        avg_performance: Number(entry.avgPerformance),
+        total_hours: Number(entry.totalHours),
+        cycle_snapshot: entry.cycleSnapshot
+      });
+    } catch {}
   },
 
   async deleteSubject(id: string) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
-    
-    // Deleta os itens do ciclo vinculados primeiro
-    const { error: cycleError } = await supabase
-      .from('cycle_items')
-      .delete()
-      .eq('subject_id', id)
-      .eq('user_id', session.user.id);
-    
-    if (cycleError) throw cycleError;
-    
-    const { error: subjectError } = await supabase
-      .from('subjects')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', session.user.id);
-
-    if (subjectError) throw subjectError;
-
+    await supabase.from('cycle_items').delete().eq('subject_id', id).eq('user_id', session.user.id);
+    await supabase.from('subjects').delete().eq('id', id).eq('user_id', session.user.id);
     return true;
   }
 };

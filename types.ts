@@ -22,12 +22,22 @@ export interface Subject {
 export interface CycleItem {
   id: string;
   subjectId: string;
+  cycleId: string; // Identificador do ciclo ao qual pertence
   duration: number;
   completed: boolean;
   order: number;
   performance?: number;
   sessionUrl?: string;
   completedAt?: number;
+}
+
+export interface CycleHistoryEntry {
+  id: string;
+  completedAt: number;
+  totalItems: number;
+  avgPerformance: number;
+  totalHours: number;
+  cycleSnapshot: CycleItem[];
 }
 
 export interface StudyCycle {

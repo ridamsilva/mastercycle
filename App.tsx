@@ -1,412 +1,268 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Subject, CycleItem } from './types.ts';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Subject, CycleItem, CycleHistoryEntry } from './types.ts';
 import { COLORS } from './constants.tsx';
 import SubjectCard from './components/SubjectCard.tsx';
 import CycleList from './components/CycleList.tsx';
 import PomodoroTimer from './components/PomodoroTimer.tsx';
 import PerformanceRank from './components/PerformanceRank.tsx';
 import UserProfile from './components/UserProfile.tsx';
+import HistoryDetail from './components/HistoryDetail.tsx';
 import Auth from './components/Auth.tsx';
 import { supabaseService, supabase } from './services/supabaseService.ts';
 
-const LOCAL_STORAGE_KEY_SUBJECTS = 'mastercycle_subjects_local';
-const LOCAL_STORAGE_KEY_CYCLE = 'mastercycle_cycle_local';
+const LOCAL_STORAGE_KEY_SUBJECTS = 'm_cycle_s';
+const LOCAL_STORAGE_KEY_CYCLE = 'm_cycle_c';
+const LOCAL_STORAGE_KEY_HISTORY = 'm_cycle_h';
+
+const generateId = (p = 'id') => `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [cycleItems, setCycleItems] = useState<CycleItem[]>([]);
-
-  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('mastercycle_darkmode') === 'true');
+  const [history, setHistory] = useState<CycleHistoryEntry[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('m_dark') === 'true');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [selectedHistory, setSelectedHistory] = useState<CycleHistoryEntry | null>(null);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
-  const [masteryValue, setMasteryValue] = useState(0);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error' | 'success'>('idle');
   
   const isInitialLoadRef = useRef(false);
-  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncTimerRef = useRef<any>(null);
+
+  const uniqueSubjects = useMemo(() => {
+    const seen = new Set();
+    return subjects.filter(s => {
+      const name = s.name.toLowerCase();
+      if (seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+  }, [subjects]);
 
   useEffect(() => {
-    supabaseService.getSession().then(session => {
-      setSession(session);
-      setIsCheckingAuth(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      if (event === 'SIGNED_OUT' || !session) {
-        setSubjects([]);
-        setCycleItems([]);
-        localStorage.removeItem(LOCAL_STORAGE_KEY_SUBJECTS);
-        localStorage.removeItem(LOCAL_STORAGE_KEY_CYCLE);
-        isInitialLoadRef.current = false;
-      } else {
-        isInitialLoadRef.current = false;
-      }
-    });
-
+    supabaseService.getSession().then(s => { setSession(s); setIsCheckingAuth(false); });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s));
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!session || isInitialLoadRef.current) return;
-
-    const hydrate = async () => {
+    (async () => {
       setSyncStatus('syncing');
-      try {
-        const cloudSubjects = await supabaseService.fetchSubjects();
-        const cloudItems = await supabaseService.fetchCycleItems();
-
-        if (cloudSubjects && cloudSubjects.length > 0) {
-          setSubjects(cloudSubjects);
-        } else {
-          const savedSubjects = localStorage.getItem(LOCAL_STORAGE_KEY_SUBJECTS);
-          if (savedSubjects) setSubjects(JSON.parse(savedSubjects));
-        }
-
-        if (cloudItems && cloudItems.length > 0) {
-          setCycleItems(cloudItems);
-        } else {
-          const savedItems = localStorage.getItem(LOCAL_STORAGE_KEY_CYCLE);
-          if (savedItems) setCycleItems(JSON.parse(savedItems));
-        }
-
-        setSyncStatus('success');
-        isInitialLoadRef.current = true;
-      } catch (e) {
-        setSyncStatus('error');
-      }
-    };
-
-    hydrate();
+      const [sCloud, iCloud, hCloud] = await Promise.all([
+        supabaseService.fetchSubjects(),
+        supabaseService.fetchCycleItems(),
+        supabaseService.fetchHistory()
+      ]);
+      setSubjects(sCloud || JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_SUBJECTS) || '[]'));
+      setCycleItems(iCloud || JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_CYCLE) || '[]'));
+      setHistory(hCloud || JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_HISTORY) || '[]'));
+      isInitialLoadRef.current = true;
+      setSyncStatus('success');
+    })();
   }, [session]);
 
   useEffect(() => {
     if (!isInitialLoadRef.current || !session) return;
-
     localStorage.setItem(LOCAL_STORAGE_KEY_SUBJECTS, JSON.stringify(subjects));
     localStorage.setItem(LOCAL_STORAGE_KEY_CYCLE, JSON.stringify(cycleItems));
+    localStorage.setItem(LOCAL_STORAGE_KEY_HISTORY, JSON.stringify(history));
 
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    
     syncTimerRef.current = setTimeout(async () => {
       setSyncStatus('syncing');
       try {
-        await supabaseService.upsertSubjects(subjects);
-        await supabaseService.upsertCycleItems(cycleItems);
+        await Promise.all([
+          supabaseService.upsertSubjects(subjects),
+          supabaseService.upsertCycleItems(cycleItems)
+        ]);
         setSyncStatus('success');
-      } catch (e) {
-        console.error("Erro no sync automático:", e);
-        setSyncStatus('error');
-      }
-    }, 2000);
-  }, [subjects, cycleItems, session]);
+      } catch { setSyncStatus('error'); }
+    }, 3000);
+  }, [subjects, cycleItems, history, session]);
 
   useEffect(() => {
-    if (isDarkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-    localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
+    document.documentElement.classList.toggle('dark', isDarkMode);
+    localStorage.setItem('m_dark', String(isDarkMode));
   }, [isDarkMode]);
 
-  const generateCycle = useCallback(async (currentSubjects: Subject[], prevItems: CycleItem[] = [], resetCompleted = false) => {
-    if (currentSubjects.length === 0) {
-      setCycleItems([]);
-      return;
-    }
-
-    const lastPerformanceMap: Record<string, number | undefined> = {};
-    prevItems.forEach(item => {
-      if (item.performance !== undefined) {
-        lastPerformanceMap[item.subjectId] = item.performance;
-      }
+  const generateCycle = useCallback((currentSubjects: Subject[], append = false) => {
+    if (!currentSubjects.length) return;
+    
+    // Mapear o último estado de cada disciplina para herança
+    const lastDataMap = new Map();
+    cycleItems.forEach(item => {
+      lastDataMap.set(item.subjectId, {
+        performance: item.performance,
+        sessionUrl: item.sessionUrl
+      });
     });
 
-    const prevItemsMap: Record<string, CycleItem[]> = {};
-    prevItems.forEach(item => {
-      if (!prevItemsMap[item.subjectId]) prevItemsMap[item.subjectId] = [];
-      prevItemsMap[item.subjectId].push(item);
-    });
-
-    const subjectOccurrenceCounters: Record<string, number> = {};
+    const newCycleId = `cycle-${Date.now()}`;
     const newItems: CycleItem[] = [];
+    const pool = currentSubjects.flatMap(s => {
+      const dur = Number((s.totalHours / s.frequency).toFixed(2));
+      return Array.from({ length: s.frequency }, () => ({ sid: s.id, dur }));
+    });
     
-    const tempPool = currentSubjects.map(s => ({
-      subjectId: s.id,
-      remaining: s.frequency,
-      duration: parseFloat((s.totalHours / s.frequency).toFixed(2))
-    }));
+    const shuffled = pool.sort(() => Math.random() - 0.5);
+    const startOrder = append ? (cycleItems.length > 0 ? Math.max(...cycleItems.map(i => i.order)) + 1 : 0) : 0;
     
-    const totalSlots = currentSubjects.reduce((acc, s) => acc + s.frequency, 0);
+    shuffled.forEach((p, i) => {
+      const history = lastDataMap.get(p.sid);
+      newItems.push({ 
+        id: generateId('item'), 
+        subjectId: p.sid, 
+        cycleId: newCycleId,
+        duration: p.dur, 
+        completed: false, 
+        order: startOrder + i,
+        performance: history?.performance, // Repete nota
+        sessionUrl: history?.sessionUrl    // Repete link
+      });
+    });
 
-    for (let i = 0; i < totalSlots; i++) {
-      let lastId: string | null = newItems.length > 0 ? newItems[newItems.length - 1].subjectId : null;
-      let candidates = tempPool.filter(p => p.remaining > 0);
-      let filtered = candidates.filter(p => p.subjectId !== lastId);
-      let selected = filtered.length > 0 
-        ? filtered.sort((a, b) => b.remaining - a.remaining)[0] 
-        : candidates[0];
+    if (append) {
+      setCycleItems(prev => [...prev, ...newItems]);
+    } else {
+      setCycleItems(newItems);
+    }
+  }, [cycleItems]);
 
-      if (selected) {
-        const sId = selected.subjectId;
-        const count = subjectOccurrenceCounters[sId] || 0;
-        const existing = prevItemsMap[sId]?.[count];
-        const subConfig = currentSubjects.find(s => s.id === sId);
-
-        const inheritedPerformance = resetCompleted 
-          ? lastPerformanceMap[sId] ?? subConfig?.masteryPercentage 
-          : existing?.performance ?? lastPerformanceMap[sId] ?? subConfig?.masteryPercentage;
-
-        // CRITICAL: Usamos IDs únicos reais para evitar erro 42501 de RLS no Supabase
-        newItems.push({
-          id: existing?.id || `item-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`, 
-          subjectId: sId,
-          duration: selected.duration,
-          completed: resetCompleted ? false : (existing?.completed || false),
-          order: i,
-          sessionUrl: existing?.sessionUrl || subConfig?.notebookUrl || "",
-          performance: inheritedPerformance,
-          completedAt: resetCompleted ? undefined : existing?.completedAt
-        });
-        
-        subjectOccurrenceCounters[sId] = count + 1;
-        selected.remaining--;
-      }
+  const handleRenovateCycle = useCallback(async () => {
+    const activeItems = cycleItems.filter(i => !i.completed);
+    if (activeItems.length > 0) {
+      if (!confirm("Você ainda possui sessões pendentes no fluxo atual. Deseja adicionar um novo ciclo mesmo assim?")) return;
     }
 
-    setCycleItems(newItems);
+    const done = cycleItems.filter(i => i.completed);
+    if (done.length > 0) {
+      const avg = Math.round(done.reduce((a, i) => a + (i.performance || 0), 0) / done.length);
+      const entry: CycleHistoryEntry = { 
+        id: generateId('h'), 
+        completedAt: Date.now(), 
+        totalItems: done.length, 
+        avgPerformance: avg, 
+        totalHours: done.reduce((a, i) => a + i.duration, 0), 
+        cycleSnapshot: [...done] 
+      };
+      setHistory(p => [entry, ...p]);
+      if (session) supabaseService.saveHistoryEntry(entry);
+    }
+
+    generateCycle(subjects, true);
+  }, [cycleItems, subjects, session, generateCycle]);
+
+  const handleMoveItem = useCallback((id: string, direction: 'up' | 'down') => {
+    setCycleItems(prev => {
+      const items = [...prev].sort((a, b) => a.order - b.order);
+      const idx = items.findIndex(i => i.id === id);
+      if (idx === -1) return prev;
+      
+      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= items.length) return prev;
+      
+      // Impedir mover itens concluídos para cima de itens pendentes ou vice-versa se desejar ordem lógica, 
+      // mas aqui permitimos organizar livremente dentro da lista
+      const tempOrder = items[idx].order;
+      items[idx].order = items[newIdx].order;
+      items[newIdx].order = tempOrder;
+      
+      return [...items];
+    });
   }, []);
 
-  const handleUpdateUrl = (itemId: string, url: string) => {
-    const item = cycleItems.find(i => i.id === itemId);
-    if (!item) return;
-    setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, sessionUrl: url } : i));
-    setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, notebookUrl: url } : s));
-  };
-
-  const handleUpdatePerformance = (itemId: string, val: number) => {
-    const item = cycleItems.find(i => i.id === itemId);
-    if (!item) return;
-    const cappedValue = Math.min(100, Math.max(0, val));
-    setCycleItems(prev => prev.map(i => i.subjectId === item.subjectId ? { ...i, performance: cappedValue } : i));
-    setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, masteryPercentage: cappedValue } : s));
-  };
-
-  const handleMoveItem = (id: string, direction: 'up' | 'down') => {
+  const handleUpdateUrl = useCallback((id: string, url: string) => {
     setCycleItems(prev => {
-      const list = [...prev].sort((a, b) => a.order - b.order);
-      const index = list.findIndex(i => i.id === id);
-      if (index === -1) return prev;
-      if (direction === 'up' && index === 0) return prev;
-      if (direction === 'down' && index === list.length - 1) return prev;
-
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      const [item] = list.splice(index, 1);
-      list.splice(targetIndex, 0, item);
-
-      return list.map((item, idx) => ({
-        ...item,
-        order: idx
-      }));
+      const targetItem = prev.find(i => i.id === id);
+      if (!targetItem) return prev;
+      
+      // Sincroniza em TODAS as sessões da mesma disciplina
+      return prev.map(item => 
+        item.subjectId === targetItem.subjectId 
+          ? { ...item, sessionUrl: url } 
+          : item
+      );
     });
-  };
+  }, []);
 
-  const handleAddOrEditSubject = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddSubject = useCallback((e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const name = (formData.get('name') as string).trim();
-    const totalHours = parseFloat(formData.get('totalHours') as string);
-    const frequency = parseInt(formData.get('frequency') as string);
-    const notebookUrl = (formData.get('notebookUrl') as string).trim();
-
-    const isDuplicateName = subjects.some(s => 
-      s.name.toLowerCase() === name.toLowerCase() && 
-      (!editingSubject || s.id !== editingSubject.id)
-    );
-
-    if (isDuplicateName) {
-      alert(`Já existe uma disciplina chamada "${name.toUpperCase()}".`);
-      return;
-    }
-
-    let updated: Subject[];
-    if (editingSubject) {
-      updated = subjects.map(s => s.id === editingSubject.id ? { 
-        ...s, name, totalHours, frequency, notebookUrl, masteryPercentage: masteryValue 
-      } : s);
-    } else {
-      const newSubject: Subject = {
-        id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        name, totalHours, frequency, notebookUrl, masteryPercentage: masteryValue,
-        color: COLORS[subjects.length % COLORS.length],
-        topics: []
-      };
-      updated = [...subjects, newSubject];
-    }
+    const fd = new FormData(e.currentTarget);
+    const name = String(fd.get('name')).trim();
+    const updated = editingSubject 
+      ? subjects.map(s => s.id === editingSubject.id ? { ...s, name, totalHours: Number(fd.get('totalHours')), frequency: Number(fd.get('frequency')), notebookUrl: String(fd.get('notebookUrl')) } : s)
+      : [...subjects, { id: generateId('sub'), name, totalHours: Number(fd.get('totalHours')), frequency: Number(fd.get('frequency')), notebookUrl: String(fd.get('notebookUrl')), masteryPercentage: 0, color: COLORS[subjects.length % COLORS.length], topics: [] }];
     setSubjects(updated);
-    generateCycle(updated, cycleItems);
-    setIsModalOpen(false);
-  };
-
-  const deleteSubject = async (id: string) => {
-    const subjectToDelete = subjects.find(s => s.id === id);
-    if (!subjectToDelete) return;
-    if (!confirm(`Excluir "${subjectToDelete.name.toUpperCase()}"?`)) return;
     
-    const nextSubjects = subjects.filter(s => s.id !== id);
-    setSubjects(nextSubjects);
-    generateCycle(nextSubjects, cycleItems);
-    
-    if (session) {
-      setSyncStatus('syncing');
-      try {
-        await supabaseService.deleteSubject(id);
-        setSyncStatus('success');
-      } catch (err) {
-        setSyncStatus('error');
-      }
+    if (!editingSubject && cycleItems.length === 0) {
+      generateCycle(updated, false);
     }
     setIsModalOpen(false);
-    setEditingSubject(null);
-  };
+  }, [editingSubject, subjects, cycleItems.length, generateCycle]);
 
-  if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-brand-blue font-black animate-pulse uppercase tracking-[0.5em]">Carregando...</div>;
+  if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 text-brand-blue font-black animate-pulse">CARREGANDO...</div>;
   if (!session) return <Auth onSuccess={setSession} />;
 
   return (
-    <div className="min-h-screen pb-24 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 font-inter text-slate-900 dark:text-slate-100">
-      <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 px-4 h-20 flex items-center justify-between shadow-sm">
+    <div className="min-h-screen pb-24 bg-slate-50 dark:bg-slate-950 transition-colors font-inter text-slate-900 dark:text-slate-100">
+      <header className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 px-6 h-20 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 relative group">
-             <svg viewBox="0 0 250 250" className="w-full h-full drop-shadow-md">
-                <path d="M125 35 A 90 90 0 0 0 35 125" fill="none" stroke="#0066b2" strokeWidth="18" strokeLinecap="round" />
-                <path d="M110 20 L 145 35 L 110 50 Z" fill="#0066b2" />
-                <path d="M125 215 A 90 90 0 0 0 215 125" fill="none" stroke="#f37021" strokeWidth="18" strokeLinecap="round" />
-                <path d="M140 230 L 105 215 L 140 200 Z" fill="#f37021" />
-                <g transform="rotate(-10, 125, 125)">
-                  <rect x="80" y="65" width="90" height="120" rx="6" fill="white" stroke="#334155" strokeWidth="3" />
-                  <path d="M120 125 L 132 140 L 155 110" stroke="#d00" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                </g>
-                <g transform="rotate(40, 125, 125) translate(38, -84)">
-                  <path d="M110 30 L 140 30 L 140 100 L 110 100 Z" fill="#0066b2" />
-                  <rect x="108" y="100" width="34" height="6" fill="#cbd5e1" />
-                  <path d="M110 106 L 140 106 L 135 160 L 115 160 Z" fill="#f37021" />
-                  <path d="M115 160 L 135 160 L 125 190 Z" fill="white" />
-                  <circle cx="125" cy="190" r="3" fill="#334155" />
-                </g>
-             </svg>
-          </div>
-          <div className="flex flex-col">
-            <div className="flex text-lg sm:text-xl font-black tracking-tighter uppercase leading-none">
-              <span className="text-[#0066b2]">MASTER</span>
-              <span className="text-[#f37021]">CYCLE</span>
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 sm:mt-2">
-              <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-              <span className="text-[8px] sm:text-[9px] font-black uppercase text-slate-400 tracking-wider">
-                {syncStatus === 'syncing' ? 'Salvando' : syncStatus === 'error' ? 'Erro' : 'Cloud On'}
-              </span>
-            </div>
-          </div>
+          <div className="text-xl font-black uppercase tracking-tighter"><span className="text-brand-blue">MASTER</span><span className="text-brand-orange">CYCLE</span></div>
+          <div className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
         </div>
-
         <div className="flex items-center gap-2">
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all">
-            {isDarkMode ? '☀️' : '🌙'}
-          </button>
-          <button onClick={() => setIsStatsOpen(true)} className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800 text-[#0066b2] transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" /></svg>
-          </button>
-          {/* BOTÃO CABEÇALHO - AGORA SEMPRE VISÍVEL NO MOBILE COMO + */}
-          <button 
-            onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }} 
-            className="flex items-center justify-center h-10 sm:h-12 px-4 sm:px-6 bg-[#0066b2] text-white rounded-xl sm:rounded-2xl shadow-lg hover:bg-brand-darkBlue transition-all active:scale-95"
-          >
-            <span className="hidden sm:inline text-[10px] font-black uppercase tracking-[0.2em]">Nova Matéria</span>
-            <span className="sm:hidden text-2xl font-black">+</span>
-          </button>
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800">{isDarkMode ? '☀️' : '🌙'}</button>
+          <button onClick={() => setIsStatsOpen(true)} className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-brand-blue">👤</button>
+          <button onClick={() => { setEditingSubject(null); setIsModalOpen(true); }} className="h-11 px-6 bg-brand-blue text-white rounded-xl font-black uppercase text-[10px]">Nova Matéria</button>
         </div>
       </header>
 
-      {/* BOTÃO FLUTUANTE (FAB) PARA MOBILE - GARANTE QUE ESTEJA SEMPRE ACESSÍVEL */}
-      <button 
-        onClick={() => { setEditingSubject(null); setMasteryValue(0); setIsModalOpen(true); }}
-        className="lg:hidden fixed bottom-6 right-6 z-[60] w-14 h-14 bg-[#0066b2] text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-black transition-transform active:scale-90 border-4 border-white dark:border-slate-900"
-      >
-        +
-      </button>
-
-      <main className="max-w-7xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8 order-1 lg:order-2">
+      <main className="max-w-7xl mx-auto px-6 mt-10 grid grid-cols-1 lg:grid-cols-12 gap-10">
+        <div className="lg:col-span-8 order-2 lg:order-1">
           <CycleList 
             items={cycleItems} 
             subjects={subjects} 
-            onToggleComplete={id => setCycleItems(prev => prev.map(i => i.id === id ? { ...i, completed: !i.completed, completedAt: !i.completed ? Date.now() : undefined } : i))}
-            onUpdatePerformance={handleUpdatePerformance}
+            onToggleComplete={id => setCycleItems(p => p.map(i => i.id === id ? { ...i, completed: !i.completed, completedAt: !i.completed ? Date.now() : undefined } : i))}
+            onUpdatePerformance={(id, v) => setCycleItems(p => p.map(i => i.id === id ? { ...i, performance: v } : i))}
             onUpdateUrl={handleUpdateUrl}
-            onMoveItem={handleMoveItem}
-            onAppendCycle={() => generateCycle(subjects, cycleItems, true)}
-            onUpdateSubjectTopics={(sid, topics) => setSubjects(prev => prev.map(s => s.id === sid ? { ...s, topics } : s))}
+            onMoveItem={handleMoveItem} 
+            onAppendCycle={handleRenovateCycle} 
+            onUpdateSubjectTopics={(sid, t) => setSubjects(p => p.map(s => s.id === sid ? { ...s, topics: t } : s))}
           />
         </div>
-
-        <div className="lg:col-span-4 order-2 lg:order-1 space-y-10">
+        <div className="lg:col-span-4 order-1 lg:order-2 space-y-10">
           <PomodoroTimer />
           <PerformanceRank subjects={subjects} />
           <div className="space-y-4">
-             <div className="flex items-center justify-between">
-                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Suas Disciplinas</h3>
-             </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
-               {subjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={deleteSubject} onEdit={(sub) => { setEditingSubject(sub); setMasteryValue(sub.masteryPercentage); setIsModalOpen(true); }} />)}
-             </div>
+             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Matérias Ativas</h3>
+             {uniqueSubjects.map(s => <SubjectCard key={s.id} subject={s} onDelete={id => { setSubjects(p => p.filter(sub => sub.id !== id)); }} onEdit={s => { setEditingSubject(s); setIsModalOpen(true); }} />)}
           </div>
         </div>
       </main>
 
-      {isStatsOpen && <UserProfile subjects={subjects} cycleItems={cycleItems} onClose={() => setIsStatsOpen(false)} />}
+      {isStatsOpen && <UserProfile subjects={subjects} cycleItems={cycleItems} history={history} onClose={() => setIsStatsOpen(false)} onSelectHistory={setSelectedHistory} />}
+      {selectedHistory && <HistoryDetail entry={selectedHistory} subjects={subjects} onClose={() => setSelectedHistory(null)} />}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-900 rounded-[32px] sm:rounded-[40px] w-full max-w-lg p-6 sm:p-10 shadow-2xl overflow-y-auto max-h-[90vh] border border-slate-200 dark:border-slate-800">
-            <form onSubmit={handleAddOrEditSubject} className="space-y-6 sm:space-y-8">
-              <div className="space-y-2 text-center">
-                <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">{editingSubject ? 'Editar' : 'Nova'} Disciplina</h2>
-              </div>
-              <div className="space-y-4 sm:space-y-5">
-                <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nome</label>
-                   <input name="name" defaultValue={editingSubject?.name} required className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Horas Totais</label>
-                    <input name="totalHours" type="number" step="0.5" defaultValue={editingSubject?.totalHours || 1} className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Repetições</label>
-                    <input name="frequency" type="number" min="1" defaultValue={editingSubject?.frequency || 1} className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-bold outline-none focus:border-[#0066b2] transition-all" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Link Base (Opcional)</label>
-                   <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-slate-100 dark:bg-slate-800 dark:border-slate-800 dark:text-white font-medium outline-none focus:border-[#0066b2] transition-all" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-3 sm:gap-4">
-                <div className="flex gap-3 sm:gap-4">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-4 rounded-xl sm:rounded-2xl bg-slate-100 font-black dark:bg-slate-800 text-slate-500 uppercase text-[10px] tracking-widest">Cancelar</button>
-                  <button type="submit" className="flex-1 p-4 rounded-xl sm:rounded-2xl bg-[#0066b2] text-white font-black uppercase text-[10px] tracking-widest hover:bg-brand-darkBlue">Salvar</button>
-                </div>
-                {editingSubject && (
-                  <button type="button" onClick={() => deleteSubject(editingSubject.id)} className="w-full p-3 rounded-xl text-rose-500 font-black uppercase text-[9px] tracking-[0.2em] border border-rose-100 dark:border-rose-900/40">Excluir Matéria</button>
-                )}
-              </div>
-            </form>
-          </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <form onSubmit={handleAddSubject} className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-lg p-10 shadow-2xl space-y-6">
+            <h2 className="text-xl font-black uppercase text-center">{editingSubject ? 'Editar' : 'Nova'} Matéria</h2>
+            <input name="name" defaultValue={editingSubject?.name} placeholder="Nome da Disciplina" required className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 font-bold outline-none focus:border-brand-blue" />
+            <div className="grid grid-cols-2 gap-4">
+              <input name="totalHours" type="number" defaultValue={editingSubject?.totalHours} placeholder="Carga Horária" className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 font-bold outline-none" />
+              <input name="frequency" type="number" defaultValue={editingSubject?.frequency} placeholder="Vezes no Ciclo" className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 font-bold outline-none" />
+            </div>
+            <input name="notebookUrl" defaultValue={editingSubject?.notebookUrl} placeholder="Link do Caderno (opcional)" className="w-full p-4 rounded-2xl border-2 dark:bg-slate-800 dark:border-slate-800 outline-none" />
+            <div className="flex gap-4">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 font-black text-slate-400 uppercase text-[10px]">Cancelar</button>
+              <button type="submit" className="flex-1 p-4 rounded-2xl bg-brand-blue text-white font-black uppercase text-[10px]">Confirmar</button>
+            </div>
+          </form>
         </div>
       )}
     </div>
