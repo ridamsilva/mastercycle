@@ -114,13 +114,22 @@ const App: React.FC = () => {
     localStorage.setItem('mastercycle_darkmode', String(isDarkMode));
   }, [isDarkMode]);
 
-  // GERAÇÃO DE CICLO INTELIGENTE
+  // GERAÇÃO DE CICLO INTELIGENTE COM HERANÇA DE NOTA
   const generateCycle = useCallback(async (currentSubjects: Subject[], prevItems: CycleItem[] = [], resetCompleted = false) => {
     if (currentSubjects.length === 0) {
       setCycleItems([]);
       return;
     }
 
+    // Pega a última performance de cada matéria no ciclo anterior para repetir nas novas ocorrências
+    const lastPerformanceMap: Record<string, number | undefined> = {};
+    prevItems.forEach(item => {
+      if (item.performance !== undefined) {
+        lastPerformanceMap[item.subjectId] = item.performance;
+      }
+    });
+
+    // Mapeamento por ocorrência para preservação de progresso (se não for reset)
     const prevItemsMap: Record<string, CycleItem[]> = {};
     prevItems.forEach(item => {
       if (!prevItemsMap[item.subjectId]) prevItemsMap[item.subjectId] = [];
@@ -152,6 +161,11 @@ const App: React.FC = () => {
         const existing = prevItemsMap[sId]?.[count];
         const subConfig = currentSubjects.find(s => s.id === sId);
 
+        // Herda a nota: Prioridade -> Existente na mesma ocorrência > Última nota da matéria > Nota config global
+        const inheritedPerformance = resetCompleted 
+          ? lastPerformanceMap[sId] ?? subConfig?.masteryPercentage 
+          : existing?.performance ?? lastPerformanceMap[sId] ?? subConfig?.masteryPercentage;
+
         newItems.push({
           id: `slot-${i}`, 
           subjectId: sId,
@@ -159,7 +173,7 @@ const App: React.FC = () => {
           completed: resetCompleted ? false : (existing?.completed || false),
           order: i,
           sessionUrl: existing?.sessionUrl || subConfig?.notebookUrl || "",
-          performance: resetCompleted ? undefined : existing?.performance,
+          performance: inheritedPerformance,
           completedAt: resetCompleted ? undefined : existing?.completedAt
         });
         
@@ -181,9 +195,19 @@ const App: React.FC = () => {
   const handleUpdatePerformance = (itemId: string, val: number) => {
     const item = cycleItems.find(i => i.id === itemId);
     if (!item) return;
+    
+    // Limite rígido de 100%
     const cappedValue = Math.min(100, Math.max(0, val));
-    setCycleItems(prev => prev.map(i => i.id === itemId ? { ...i, performance: cappedValue } : i));
-    setSubjects(prev => prev.map(s => s.id === item.subjectId ? { ...s, masteryPercentage: cappedValue } : s));
+    
+    // REPETIR NOTA: Sincroniza todas as ocorrências da mesma disciplina no ciclo
+    setCycleItems(prev => prev.map(i => 
+      i.subjectId === item.subjectId ? { ...i, performance: cappedValue } : i
+    ));
+    
+    // Atualiza a nota global da matéria para herança futura
+    setSubjects(prev => prev.map(s => 
+      s.id === item.subjectId ? { ...s, masteryPercentage: cappedValue } : s
+    ));
   };
 
   const handleMoveItem = (id: string, direction: 'up' | 'down') => {
@@ -198,7 +222,7 @@ const App: React.FC = () => {
       const [item] = list.splice(index, 1);
       list.splice(targetIndex, 0, item);
 
-      // Re-mapeia ordem e IDs para manter consistência no banco
+      // Re-mapeia IDs determinísticos para evitar duplicatas no Supabase ao persistir a nova ordem
       return list.map((item, idx) => ({
         ...item,
         order: idx,
@@ -240,6 +264,8 @@ const App: React.FC = () => {
       updated = [...subjects, newSubject];
     }
     setSubjects(updated);
+    
+    // Preserva estado ao adicionar nova matéria
     generateCycle(updated, cycleItems);
     setIsModalOpen(false);
   };
