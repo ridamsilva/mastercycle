@@ -1,7 +1,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
-import { SUPABASE_URL, SUPABASE_KEY } from '../constants';
-import { Subject, CycleItem } from '../types';
+import { SUPABASE_URL, SUPABASE_KEY } from '../constants.tsx';
+import { Subject, CycleItem } from '../types.ts';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -12,7 +12,13 @@ export const supabaseService = {
         .from('subjects')
         .select('*');
       
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST116' || error.message.includes('cache')) {
+          console.warn('Tabela subjects não encontrada no Supabase. Verifique se as tabelas foram criadas no SQL Editor.');
+          return null;
+        }
+        throw error;
+      }
       return data;
     } catch (error: any) {
       console.error('Erro ao buscar disciplinas:', error.message || error);
@@ -20,24 +26,28 @@ export const supabaseService = {
     }
   },
 
-  async upsertSubject(subject: Subject) {
+  async upsertSubjects(subjects: Subject[]) {
     try {
+      if (subjects.length === 0) return;
+
+      const formattedSubjects = subjects.map(s => ({
+        id: s.id,
+        name: s.name,
+        totalHours: s.totalHours,
+        frequency: s.frequency,
+        notebookUrl: s.notebookUrl || null,
+        masteryPercentage: s.masteryPercentage || 0,
+        color: s.color,
+        topics: s.topics || []
+      }));
+
       const { error } = await supabase
         .from('subjects')
-        .upsert({
-          id: subject.id,
-          name: subject.name,
-          totalHours: subject.totalHours,
-          frequency: subject.frequency,
-          notebookUrl: subject.notebookUrl,
-          masteryPercentage: subject.masteryPercentage,
-          color: subject.color,
-          topics: subject.topics 
-        });
+        .upsert(formattedSubjects);
       
       if (error) throw error;
     } catch (error: any) {
-      console.error(`Erro ao salvar disciplina ${subject.name}:`, error.message || error);
+      console.error('Erro ao salvar disciplinas:', error.message || error);
       throw error;
     }
   },
@@ -62,7 +72,13 @@ export const supabaseService = {
         .select('*')
         .order('order', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST116' || error.message.includes('cache')) {
+          console.warn('Tabela cycle_items não encontrada no Supabase.');
+          return null;
+        }
+        throw error;
+      }
       return data;
     } catch (error: any) {
       console.error('Erro ao buscar itens do ciclo:', error.message || error);
