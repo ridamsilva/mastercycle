@@ -43,9 +43,27 @@ const App: React.FC = () => {
     });
   }, [subjects]);
 
+  // Melhora na persistência da sessão
   useEffect(() => {
-    supabaseService.getSession().then(s => { setSession(s); setIsCheckingAuth(false); });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s));
+    const checkSession = async () => {
+      const currentSession = await supabaseService.getSession();
+      if (currentSession) {
+        setSession(currentSession);
+      }
+      setIsCheckingAuth(false);
+    };
+    
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        isInitialLoadRef.current = false;
+      } else if (newSession) {
+        setSession(newSession);
+      }
+    });
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -58,9 +76,12 @@ const App: React.FC = () => {
         supabaseService.fetchCycleItems(),
         supabaseService.fetchHistory()
       ]);
+      
+      // Merge com local storage caso o fetch venha vazio
       setSubjects(sCloud || JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_SUBJECTS) || '[]'));
       setCycleItems(iCloud || JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_CYCLE) || '[]'));
       setHistory(hCloud || JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_HISTORY) || '[]'));
+      
       isInitialLoadRef.current = true;
       setSyncStatus('success');
     })();
@@ -99,7 +120,7 @@ const App: React.FC = () => {
         sname: s.name, 
         scolor: s.color, 
         dur,
-        url: s.notebookUrl // Herdando o link do cadastro da disciplina
+        url: s.notebookUrl
       }));
     });
     
@@ -114,7 +135,7 @@ const App: React.FC = () => {
       duration: p.dur, 
       completed: false, 
       order: lastOrder + 1 + i,
-      sessionUrl: p.url // Definindo o link para as novas sessões
+      sessionUrl: p.url
     }));
   }, []);
 
@@ -167,12 +188,10 @@ const App: React.FC = () => {
       const targetItem = prev.find(i => i.id === id);
       if (!targetItem) return prev;
 
-      // Sincroniza o link com o cadastro principal da disciplina para futuros ciclos
       setSubjects(sPrev => sPrev.map(s => 
         s.id === targetItem.subjectId ? { ...s, notebookUrl: url } : s
       ));
 
-      // Atualiza o link em todas as sessões DESTA disciplina no ciclo atual
       return prev.map(item => 
         item.subjectId === targetItem.subjectId 
           ? { ...item, sessionUrl: url } 
@@ -203,17 +222,58 @@ const App: React.FC = () => {
       setSubjects(p => p.map(s => s.id === editingSubject.id ? { ...s, name, totalHours: hours, frequency: freq, notebookUrl: url } : s));
       
       const newDuration = Number((hours / freq).toFixed(2));
-      setCycleItems(prev => prev.map(item => {
-        if (item.subjectId === editingSubject.id) {
-          return {
-            ...item,
+
+      setCycleItems(prev => {
+        const subjectItems = prev.filter(item => item.subjectId === editingSubject.id);
+        const completedCount = subjectItems.filter(i => i.completed).length;
+        const pendingItems = subjectItems.filter(i => !i.completed).sort((a, b) => a.order - b.order);
+        
+        let newItems = [...prev];
+
+        // 1. Atualiza dados básicos e duração em todos os itens existentes deste assunto
+        newItems = newItems.map(item => {
+          if (item.subjectId === editingSubject.id) {
+            return {
+              ...item,
+              subjectName: name,
+              duration: newDuration,
+              sessionUrl: url
+            };
+          }
+          return item;
+        });
+
+        // 2. Ajusta a quantidade de sessões pendentes se a frequência mudou
+        const currentTotalCount = subjectItems.length;
+        if (freq > currentTotalCount) {
+          // Adicionar sessões faltantes
+          const diff = freq - currentTotalCount;
+          const maxOrder = newItems.length > 0 ? Math.max(...newItems.map(i => i.order)) : 0;
+          const extraItems: CycleItem[] = Array.from({ length: diff }, (_, i) => ({
+            id: generateId('item'),
+            subjectId: editingSubject.id,
             subjectName: name,
+            subjectColor: editingSubject.color,
+            cycleId: subjectItems[0]?.cycleId || `cycle-${Date.now()}`,
             duration: newDuration,
-            sessionUrl: url // Atualiza o link nas sessões atuais também ao editar matéria
-          };
+            completed: false,
+            order: maxOrder + 1 + i,
+            sessionUrl: url
+          }));
+          newItems = [...newItems, ...extraItems];
+        } else if (freq < currentTotalCount) {
+          // Remover sessões pendentes se possível
+          let toRemove = currentTotalCount - freq;
+          // Filtramos de trás para frente os itens pendentes
+          const idsToRemove = pendingItems
+            .slice(-toRemove)
+            .map(i => i.id);
+          
+          newItems = newItems.filter(item => !idsToRemove.includes(item.id));
         }
-        return item;
-      }));
+
+        return newItems;
+      });
     } else {
       const newSub: Subject = { 
         id: generateId('sub'), 
@@ -238,7 +298,7 @@ const App: React.FC = () => {
         duration: dur,
         completed: false,
         order: startOrder + i,
-        sessionUrl: url // Inicia novas sessões com o link fornecido
+        sessionUrl: url
       }));
       setCycleItems(prev => [...prev, ...newSessions]);
     }
