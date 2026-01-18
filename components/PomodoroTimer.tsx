@@ -82,7 +82,7 @@ const PomodoroTimer: React.FC = () => {
         </h3>
         <button 
           onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-          className={`p-1.5 rounded-lg transition-all ${isSettingsOpen ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400'}`}
+          className={`p-1.5 rounded-lg transition-all ${isSettingsOpen ? 'bg-blue-50 dark:bg-blue-900/30 text-brand-blue' : 'text-slate-400 hover:text-brand-blue'}`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
@@ -99,7 +99,7 @@ const PomodoroTimer: React.FC = () => {
                 type="number" 
                 value={workTime} 
                 onChange={(e) => setWorkTime(Math.max(1, Number(e.target.value)))}
-                className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+                className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-brand-blue focus:outline-none"
               />
             </div>
             <div className="space-y-1">
@@ -108,7 +108,7 @@ const PomodoroTimer: React.FC = () => {
                 type="number" 
                 value={shortBreak} 
                 onChange={(e) => setShortBreak(Math.max(1, Number(e.target.value)))}
-                className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+                className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-brand-blue focus:outline-none"
               />
             </div>
             <div className="space-y-1">
@@ -117,7 +117,7 @@ const PomodoroTimer: React.FC = () => {
                 type="number" 
                 value={longBreak} 
                 onChange={(e) => setLongBreak(Math.max(1, Number(e.target.value)))}
-                className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+                className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-brand-blue focus:outline-none"
               />
             </div>
           </div>
@@ -130,7 +130,7 @@ const PomodoroTimer: React.FC = () => {
                 setSelectedSound(sound);
                 new Audio(ALARM_SOUNDS[sound].url).play().catch(() => {});
               }}
-              className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-indigo-500 focus:outline-none"
+              className="w-full p-2 border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-md text-[10px] font-bold focus:border-brand-blue focus:outline-none"
             >
               {Object.entries(ALARM_SOUNDS).map(([key, { name }]) => (
                 <option key={key} value={key}>{name}</option>
@@ -143,19 +143,19 @@ const PomodoroTimer: React.FC = () => {
       <div className="flex gap-1.5 mb-6">
         <button 
           onClick={() => updateTimeLeft('work')}
-          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'work' ? 'bg-indigo-600 text-white shadow-md dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'work' ? 'bg-brand-blue text-white shadow-md dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
         >
           Foco
         </button>
         <button 
           onClick={() => updateTimeLeft('short')}
-          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'short' ? 'bg-indigo-600 text-white shadow-md dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'short' ? 'bg-brand-blue text-white shadow-md dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
         >
           Pausa 1
         </button>
         <button 
           onClick={() => updateTimeLeft('long')}
-          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'long' ? 'bg-indigo-600 text-white shadow-md dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+          className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${mode === 'long' ? 'bg-brand-blue text-white shadow-md dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
         >
           Pausa 2
         </button>
@@ -170,7 +170,7 @@ const PomodoroTimer: React.FC = () => {
           />
           <circle 
             cx="80" cy="80" r={radius} 
-            className="stroke-indigo-600 transition-all duration-700 ease-out" 
+            className="stroke-brand-blue transition-all duration-700 ease-out" 
             strokeWidth="8" fill="transparent" 
             strokeDasharray={circumference}
             strokeDashoffset={circumference - (circumference * progress()) / 100}
@@ -181,7 +181,7 @@ const PomodoroTimer: React.FC = () => {
           <span className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter tabular-nums">
             {formatTime(timeLeft)}
           </span>
-          <span className={`text-[9px] font-black uppercase tracking-widest mt-1 ${mode === 'work' ? 'text-indigo-600 dark:text-indigo-400' : 'text-indigo-400 dark:text-indigo-500'}`}>
+          <span className={`text-[9px] font-black uppercase tracking-widest mt-1 ${mode === 'work' ? 'text-brand-blue' : 'text-brand-orange'}`}>
             {mode === 'work' ? 'Concentração' : 'Descanso'}
           </span>
         </div>
@@ -193,7 +193,7 @@ const PomodoroTimer: React.FC = () => {
           className={`w-full py-3.5 text-xs font-black uppercase rounded-xl transition-all active:scale-[0.98] ${
             isActive 
               ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/40 hover:bg-rose-100 dark:hover:bg-rose-900/30' 
-              : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700'
+              : 'bg-brand-blue text-white shadow-lg shadow-blue-100 dark:shadow-none hover:bg-brand-darkBlue'
           }`}
         >
           {isActive ? 'Pausar' : 'Iniciar Foco'}
@@ -201,7 +201,7 @@ const PomodoroTimer: React.FC = () => {
         
         <button 
           onClick={resetTimer}
-          className="w-full py-2 text-[9px] font-bold uppercase text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 transition-all"
+          className="w-full py-2 text-[9px] font-bold uppercase text-slate-400 dark:text-slate-600 hover:text-brand-orange transition-all"
         >
           Reiniciar Ciclo
         </button>

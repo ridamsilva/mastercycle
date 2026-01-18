@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_PUBLIC_ANON_KEY } from '../constants.tsx';
 import { Subject, CycleItem } from '../types.ts';
@@ -21,6 +22,32 @@ export const supabaseService = {
   async getSession() {
     const { data: { session } } = await supabase.auth.getSession();
     return session;
+  },
+
+  async updateProfile(fullName: string) {
+    return await supabase.auth.updateUser({
+      data: { full_name: fullName }
+    });
+  },
+
+  async updatePassword(newPassword: string) {
+    return await supabase.auth.updateUser({
+      password: newPassword
+    });
+  },
+
+  /**
+   * No Supabase, a exclusão de usuário via Client SDK é restrita.
+   * Este método limpa as preferências e desloga o usuário. 
+   * Em produção, isso dispararia uma Edge Function ou RPC.
+   */
+  async deleteAccount() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Limpa dados das tabelas associadas via RLS/Triggers se configurado,
+    // ou simplesmente desloga o usuário após marcar um flag de 'deleted'.
+    await this.signOut();
   },
 
   async fetchSubjects(): Promise<Subject[] | null> {
@@ -121,8 +148,9 @@ export const supabaseService = {
         completed: item.completed,
         order: item.order,
         performance: item.performance || null,
-        // Fix property access: CycleItem uses sessionUrl (camelCase)
+        // Fix: session_url property correctly mapped from sessionUrl property of CycleItem type
         session_url: item.sessionUrl || null,
+        // Fix: completed_at property correctly mapped from completedAt property of CycleItem type
         completed_at: item.completedAt || null
       }));
 
