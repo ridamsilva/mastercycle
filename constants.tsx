@@ -1,25 +1,14 @@
 
 export const COLORS = [
-  '#6366f1', // Indigo
-  '#ec4899', // Pink
-  '#f59e0b', // Amber
-  '#10b981', // Emerald
-  '#3b82f6', // Blue
-  '#8b5cf6', // Violet
-  '#f43f5e', // Rose
-  '#06b6d4', // Cyan
-  '#fb923c', // Orange
-  '#a855f7', // Purple
-  '#14b8a6', // Teal
-  '#eab308', // Yellow
-  '#64748b', // Slate
-  '#4ade80', // Green
-  '#f87171', // Red
-  '#818cf8', // Soft Indigo
+  '#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', 
+  '#8b5cf6', '#f43f5e', '#06b6d4', '#fb923c', '#a855f7', 
+  '#14b8a6', '#eab308', '#64748b', '#4ade80', '#f87171', '#818cf8',
 ];
 
-export const INITIAL_SUBJECTS: any[] = [];
-
-// Credenciais Supabase
-export const SUPABASE_URL = "https://oejhdhtfbsdrihaojkmn.supabase.co";
-export const SUPABASE_KEY = "sb_publishable_8u_p2CpKrxIh7aUgJstNmw_FD1N47ma";
+/**
+ * IMPORTANTE: Estas chaves são PÚBLICAS (Anon Key). 
+ * A segurança real dos seus dados é garantida pelo RLS (Row Level Security) 
+ * configurado no painel do Supabase.
+ */
+export const SUPABASE_URL = 'https://qtgsreofwpnmngtesoom.supabase.co';
+export const SUPABASE_PUBLIC_ANON_KEY = 'sb_publishable_U_5vp2zoZPH0aFo4NZq4zg_ydoaTgGw';
